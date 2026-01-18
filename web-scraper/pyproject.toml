@@ -1,0 +1,32 @@
+[project]
+name = "web-scraper"
+version = "0.1.0"
+description = "Web scraping system for extracting company data"
+requires-python = ">=3.10"
+dependencies = [
+    "psycopg2-binary",
+    "playwright",
+    "beautifulsoup4",
+    "lxml",
+    "langdetect",
+    "spacy",
+    "click",
+    "pyyaml",
+    "python-dotenv",
+    "phonenumbers",
+    "pybloom-live",
+    "requests",  # for webhooks
+    "datefinder", # recommended in analysis
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "ruff"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
