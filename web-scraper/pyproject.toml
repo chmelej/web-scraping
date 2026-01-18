@@ -6,6 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "psycopg2-binary",
     "playwright",
+    "crawlee",  # Added crawlee
     "beautifulsoup4",
     "lxml",
     "langdetect",
@@ -15,8 +16,8 @@ dependencies = [
     "python-dotenv",
     "phonenumbers",
     "pybloom-live",
-    "requests",  # for webhooks
-    "datefinder", # recommended in analysis
+    "requests",
+    "datefinder",
 ]
 
 [project.optional-dependencies]
