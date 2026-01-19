@@ -13,7 +13,7 @@ class BloomFilterManager:
 
         with get_cursor(self.conn, dict_cursor=False) as cur:
             cur.execute("""
-                INSERT INTO bloom_filters
+                INSERT INTO scr_bloom_filters
                 (name, filter_data, item_count, false_positive_rate)
                 VALUES (%s, %s, 0, %s)
                 ON CONFLICT (name) DO NOTHING
@@ -30,7 +30,7 @@ class BloomFilterManager:
 
         with get_cursor(self.conn) as cur:
             cur.execute("""
-                SELECT filter_data FROM bloom_filters WHERE name = %s
+                SELECT filter_data FROM scr_bloom_filters WHERE name = %s
             """, (name,))
             row = cur.fetchone()
 
@@ -56,7 +56,7 @@ class BloomFilterManager:
         with get_cursor(self.conn, dict_cursor=False) as cur:
             # Update filter
             cur.execute("""
-                UPDATE bloom_filters
+                UPDATE scr_bloom_filters
                 SET filter_data = %s,
                     item_count = item_count + 1,
                     last_updated = NOW()
@@ -65,7 +65,7 @@ class BloomFilterManager:
 
             # Save item to items table
             cur.execute("""
-                INSERT INTO bloom_filter_items (filter_name, item, source)
+                INSERT INTO scr_bloom_filter_items(filter_name, item, source)
                 VALUES (%s, %s, %s)
                 ON CONFLICT DO NOTHING
             """, (filter_name, item, source))
@@ -84,14 +84,14 @@ class BloomFilterManager:
         with get_cursor(self.conn) as cur:
             cur.execute("""
                 SELECT item_count, false_positive_rate, last_updated
-                FROM bloom_filters WHERE name = %s
+                FROM scr_bloom_filters WHERE name = %s
             """, (filter_name,))
             return cur.fetchone()
 
     def rebuild_from_db(self, filter_name):
         """Rebuil filtru z bloom_filter_items"""
         with get_cursor(self.conn) as cur:
-             cur.execute("SELECT item FROM bloom_filter_items WHERE filter_name = %s", (filter_name,))
+             cur.execute("SELECT item FROM scr_bloom_filter_itemsWHERE filter_name = %s", (filter_name,))
              items = cur.fetchall()
 
              # Delete old filter
@@ -99,7 +99,7 @@ class BloomFilterManager:
              capacity = max(len(items) * 2, 100000)
 
         with get_cursor(self.conn, dict_cursor=False) as cur:
-             cur.execute("DELETE FROM bloom_filters WHERE name = %s", (filter_name,))
+             cur.execute("DELETE FROM scr_bloom_filters WHERE name = %s", (filter_name,))
              self.conn.commit()
 
         bf = self.create_filter(filter_name, capacity=capacity)
@@ -110,7 +110,7 @@ class BloomFilterManager:
         # Update DB
         with get_cursor(self.conn, dict_cursor=False) as cur:
             cur.execute("""
-                UPDATE bloom_filters
+                UPDATE scr_bloom_filters
                 SET filter_data = %s,
                     item_count = %s
                 WHERE name = %s
