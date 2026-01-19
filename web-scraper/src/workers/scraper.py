@@ -3,7 +3,8 @@ import json
 import time
 import socket
 from datetime import datetime, timedelta
-from crawlee.playwright_crawler import PlaywrightCrawler
+from crawlee.crawlers import PlaywrightCrawler
+from crawlee import Request
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.language import detect_language
 from src.utils.urls import extract_domain
@@ -113,11 +114,12 @@ class Scraper:
         request = context.request
         page = context.page
 
-        # User data passed via request.user_data
-        queue_id = request.user_data['queue_id']
-        retry_count = request.user_data['retry_count']
-        unit_listing_id = request.user_data.get('unit_listing_id')
-        depth = request.user_data.get('depth', 0)
+        # User data passed via request.user_data (dict-like access works via get or item access)
+        user_data = request.user_data
+        queue_id = user_data['queue_id']
+        retry_count = user_data['retry_count']
+        unit_listing_id = user_data.get('unit_listing_id')
+        depth = user_data.get('depth', 0)
 
         self.logger.info(f"Processing {request.url}")
 
@@ -135,8 +137,6 @@ class Scraper:
             content = await page.content()
             result['html'] = content
             result['status_code'] = 200 # Assumed success if page loaded
-
-            # Try to get real status if possible via page.request.response(), but crawlee handles basic load
 
             # Save result (run in executor to not block loop)
             loop = asyncio.get_running_loop()
@@ -175,15 +175,17 @@ class Scraper:
         # Mark as processing
         self.update_queue_status_sync(item['id'], 'processing')
 
-        request_list = [{
-            "url": item['url'],
-            "user_data": {
-                "queue_id": item['id'],
-                "retry_count": item['retry_count'],
-                "unit_listing_id": item['unit_listing_id'],
-                "depth": item['depth']
-            }
-        }]
+        request_list = [
+            Request.from_url(
+                url=item['url'],
+                user_data={
+                    "queue_id": item['id'],
+                    "retry_count": item['retry_count'],
+                    "unit_listing_id": item['unit_listing_id'],
+                    "depth": item['depth']
+                }
+            )
+        ]
 
         async def run_crawler():
             crawler = PlaywrightCrawler(
@@ -201,7 +203,6 @@ class Scraper:
                  loop = None
 
              if loop and loop.is_running():
-                 # This shouldn't happen in normal synchronous call, but if so, we create task
                  future = asyncio.run_coroutine_threadsafe(run_crawler(), loop)
                  future.result()
              else:
@@ -220,9 +221,6 @@ class Scraper:
             request_handler=self.request_handler,
             max_requests_per_crawl=50,
             headless=PLAYWRIGHT_HEADLESS,
-            # Crawlee for Python uses smart defaults for masking.
-            # We can enable more robust fingerprinting here if API supports it explicitly,
-            # but usually it's automatic with PlaywrightCrawler.
         )
 
         while True:
@@ -239,15 +237,17 @@ class Scraper:
             for item in batch:
                 # Mark as processing immediately
                 self.update_queue_status_sync(item['id'], 'processing')
-                request_list.append({
-                    "url": item['url'],
-                    "user_data": {
-                        "queue_id": item['id'],
-                        "retry_count": item['retry_count'],
-                        "unit_listing_id": item['unit_listing_id'],
-                        "depth": item['depth']
-                    }
-                })
+                request_list.append(
+                    Request.from_url(
+                        url=item['url'],
+                        user_data={
+                            "queue_id": item['id'],
+                            "retry_count": item['retry_count'],
+                            "unit_listing_id": item['unit_listing_id'],
+                            "depth": item['depth']
+                        }
+                    )
+                )
 
             # Run crawler on this batch
             await crawler.run(request_list)
