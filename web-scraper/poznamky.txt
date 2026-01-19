@@ -1,0 +1,4 @@
+- pri testovani nefunguje scaper
+- spatne pojmenovany sloupec s/unit_listing_id/uni_listing_id/
+- vsechny tabulky by meli mit prefix 'scr_'
+- bloom filtery jsou uplne jine nez potrebuju

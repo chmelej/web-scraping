@@ -3,7 +3,7 @@ import json
 import time
 import socket
 from datetime import datetime, timedelta
-from crawlee.playwright_crawler import PlaywrightCrawler
+from crawlee.crawlers import PlaywrightCrawler
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.language import detect_language
 from src.utils.urls import extract_domain
