@@ -6,9 +6,7 @@ requires-python = ">=3.10"
 dependencies = [
     "psycopg2-binary",
     "playwright",
-    "crawlee",
-    "browserforge", # Required by crawlee
-    "apify-fingerprint-datapoints", # Required by crawlee
+    "crawlee[beautifulsoup,playwright]", # Added crawlee
     "beautifulsoup4",
     "lxml",
     "langdetect",
