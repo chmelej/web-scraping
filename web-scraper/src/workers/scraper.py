@@ -163,6 +163,55 @@ class Scraper:
                  next_try = datetime.now() + timedelta(hours=1)
                  await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'pending', retry_count + 1, next_try)
 
+    def process_one(self):
+        """Zpracuje jedno URL (pro testování a debugging)"""
+        batch = self.fetch_batch(1)
+        if not batch:
+            return False
+
+        item = batch[0]
+        self.logger.info(f"Processing one: {item['url']}")
+
+        # Mark as processing
+        self.update_queue_status_sync(item['id'], 'processing')
+
+        request_list = [{
+            "url": item['url'],
+            "user_data": {
+                "queue_id": item['id'],
+                "retry_count": item['retry_count'],
+                "unit_listing_id": item['unit_listing_id'],
+                "depth": item['depth']
+            }
+        }]
+
+        async def run_crawler():
+            crawler = PlaywrightCrawler(
+                request_handler=self.request_handler,
+                max_requests_per_crawl=1,
+                headless=PLAYWRIGHT_HEADLESS,
+            )
+            await crawler.run(request_list)
+
+        try:
+             # Check if there is a running loop
+             try:
+                 loop = asyncio.get_running_loop()
+             except RuntimeError:
+                 loop = None
+
+             if loop and loop.is_running():
+                 # This shouldn't happen in normal synchronous call, but if so, we create task
+                 future = asyncio.run_coroutine_threadsafe(run_crawler(), loop)
+                 future.result()
+             else:
+                 asyncio.run(run_crawler())
+
+             return True
+        except Exception as e:
+             self.logger.error(f"Error in process_one: {e}")
+             return False
+
     async def run(self):
         self.logger.info("Starting Crawlee Scraper...")
 
