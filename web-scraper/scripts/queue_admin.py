@@ -25,7 +25,7 @@ def add(url, unit_id, priority):
     normalized = normalize_url(url)
 
     cur.execute("""
-        INSERT INTO scrape_queue (url, unit_listing_id, priority)
+        INSERT INTO scr_scrape_queue (url, unit_listing_id, priority)
         VALUES (%s, %s, %s)
         ON CONFLICT (url, unit_listing_id) DO UPDATE
         SET priority = EXCLUDED.priority,
@@ -54,7 +54,7 @@ def bulk_add(file, unit_id):
         try:
             normalized = normalize_url(url)
             cur.execute("""
-                INSERT INTO scrape_queue (url, unit_listing_id)
+                INSERT INTO scr_scrape_queue (url, unit_listing_id)
                 VALUES (%s, %s)
                 ON CONFLICT DO NOTHING
             """, (normalized, unit_id))
@@ -75,7 +75,7 @@ def remove(url):
     normalized = normalize_url(url)
 
     cur.execute("""
-        DELETE FROM scrape_queue
+        DELETE FROM scr_scrape_queue
         WHERE url = %s
         RETURNING id
     """, (normalized,))
@@ -94,11 +94,11 @@ def clear(status):
     cur = conn.cursor()
 
     if status:
-        cur.execute("DELETE FROM scrape_queue WHERE status = %s", (status,))
+        cur.execute("DELETE FROM scr_scrape_queue WHERE status = %s", (status,))
     else:
         if not click.confirm("Clear entire queue?"):
             return
-        cur.execute("DELETE FROM scrape_queue")
+        cur.execute("DELETE FROM scr_scrape_queue")
 
     count = cur.rowcount
     conn.commit()
@@ -112,7 +112,7 @@ def reset_failed():
     cur = conn.cursor()
 
     cur.execute("""
-        UPDATE scrape_queue
+        UPDATE scr_scrape_queue
         SET status = 'pending',
             retry_count = 0,
             next_scrape_at = NOW()
@@ -133,7 +133,7 @@ def blacklist(domain, reason):
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO domain_blacklist
+        INSERT INTO scr_domain_blacklist
         (domain, reason, auto_added, notes)
         VALUES (%s, %s, FALSE, 'Added manually')
         ON CONFLICT (domain) DO UPDATE
@@ -150,7 +150,7 @@ def whitelist(domain):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("DELETE FROM domain_blacklist WHERE domain = %s", (domain,))
+    cur.execute("DELETE FROM scr_domain_blacklist WHERE domain = %s", (domain,))
 
     if cur.rowcount:
         conn.commit()

@@ -1,6 +1,6 @@
 -- Initial Schema
 
-CREATE TABLE scrape_queue (
+CREATE TABLE scr_scrape_queue (
     id SERIAL PRIMARY KEY,
     url TEXT NOT NULL,
     unit_listing_id INTEGER,
@@ -14,12 +14,12 @@ CREATE TABLE scrape_queue (
     UNIQUE(url, unit_listing_id)
 );
 
-CREATE INDEX idx_queue_status ON scrape_queue(status, next_scrape_at);
-CREATE INDEX idx_queue_unit ON scrape_queue(unit_listing_id);
+CREATE INDEX idx_queue_status ON scr_scrape_queue(status, next_scrape_at);
+CREATE INDEX idx_queue_unit ON scr_scrape_queue(unit_listing_id);
 
-CREATE TABLE scrape_results (
+CREATE TABLE scr_scrape_results (
     id SERIAL PRIMARY KEY,
-    queue_id INTEGER REFERENCES scrape_queue(id),
+    queue_id INTEGER REFERENCES scr_scrape_queue(id),
     url TEXT NOT NULL,
     html TEXT,
     status_code INTEGER,
@@ -33,12 +33,12 @@ CREATE TABLE scrape_results (
     error_message TEXT
 );
 
-CREATE INDEX idx_results_processing ON scrape_results(processing_status);
-CREATE INDEX idx_results_language ON scrape_results(detected_language);
+CREATE INDEX idx_results_processing ON scr_scrape_results(processing_status);
+CREATE INDEX idx_results_language ON scr_scrape_results(detected_language);
 
-CREATE TABLE parsed_data (
+CREATE TABLE scr_parsed_data (
     id SERIAL PRIMARY KEY,
-    scrape_result_id INTEGER REFERENCES scrape_results(id),
+    scrape_result_id INTEGER REFERENCES scr_scrape_results(id),
     unit_listing_id INTEGER,
     content_language VARCHAR(5),
     data JSONB,
@@ -46,10 +46,10 @@ CREATE TABLE parsed_data (
     extracted_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_parsed_unit ON parsed_data(unit_listing_id);
-CREATE INDEX idx_parsed_quality ON parsed_data(quality_score);
+CREATE INDEX idx_parsed_unit ON scr_parsed_data(unit_listing_id);
+CREATE INDEX idx_parsed_quality ON scr_parsed_data(quality_score);
 
-CREATE TABLE change_history (
+CREATE TABLE scr_change_history (
     id SERIAL PRIMARY KEY,
     unit_listing_id INTEGER NOT NULL,
     field_name VARCHAR(100),
@@ -58,10 +58,10 @@ CREATE TABLE change_history (
     detected_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_changes_unit ON change_history(unit_listing_id);
-CREATE INDEX idx_changes_date ON change_history(detected_at);
+CREATE INDEX idx_changes_unit ON scr_change_history(unit_listing_id);
+CREATE INDEX idx_changes_date ON scr_change_history(detected_at);
 
-CREATE TABLE domain_blacklist (
+CREATE TABLE scr_domain_blacklist (
     domain TEXT PRIMARY KEY,
     reason VARCHAR(50),
     fail_count INTEGER DEFAULT 0,
@@ -71,14 +71,14 @@ CREATE TABLE domain_blacklist (
     notes TEXT
 );
 
-CREATE TABLE domain_multipage_rules (
+CREATE TABLE scr_domain_multipage_rules (
     domain TEXT PRIMARY KEY,
     url_patterns JSONB,
     max_depth INTEGER DEFAULT 2,
     enabled BOOLEAN DEFAULT TRUE
 );
 
-CREATE TABLE bloom_filters (
+CREATE TABLE scr_bloom_filters (
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) UNIQUE,
     filter_data BYTEA,
@@ -88,7 +88,7 @@ CREATE TABLE bloom_filters (
     last_updated TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE bloom_filter_items (
+CREATE TABLE scr_bloom_filter_items (
     filter_name VARCHAR(50),
     item TEXT,
     added_at TIMESTAMP DEFAULT NOW(),
@@ -96,7 +96,7 @@ CREATE TABLE bloom_filter_items (
     PRIMARY KEY (filter_name, item)
 );
 
-CREATE TABLE llm_prompts (
+CREATE TABLE scr_llm_prompts (
     id SERIAL PRIMARY KEY,
     use_case VARCHAR(50) NOT NULL,
     language VARCHAR(5) NOT NULL,
@@ -111,8 +111,8 @@ CREATE TABLE llm_prompts (
     UNIQUE(use_case, language)
 );
 
-CREATE TABLE prompt_stats (
-    prompt_id INTEGER REFERENCES llm_prompts(id),
+CREATE TABLE scr_prompt_stats (
+    prompt_id INTEGER REFERENCES scr_llm_prompts(id),
     date DATE DEFAULT CURRENT_DATE,
     executions INTEGER DEFAULT 0,
     successes INTEGER DEFAULT 0,
@@ -120,7 +120,7 @@ CREATE TABLE prompt_stats (
     PRIMARY KEY (prompt_id, date)
 );
 
-CREATE TABLE config (
+CREATE TABLE scr_config (
     key TEXT PRIMARY KEY,
     value TEXT,
     description TEXT

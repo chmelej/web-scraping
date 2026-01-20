@@ -18,7 +18,7 @@ class Parser:
         with get_cursor(self.conn) as cur:
             cur.execute("""
                 SELECT id, html, detected_language, url, queue_id
-                FROM scrape_results
+                FROM scr_scrape_results
                 WHERE processing_status = 'new'
                   AND html IS NOT NULL
                 ORDER BY scraped_at ASC
@@ -114,7 +114,7 @@ class Parser:
 
         with get_cursor(self.conn, dict_cursor=False) as cur:
             cur.execute("""
-                INSERT INTO parsed_data
+                INSERT INTO scr_parsed_data
                 (scrape_result_id, unit_listing_id, content_language, data, quality_score)
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING id
@@ -127,7 +127,7 @@ class Parser:
 
             # Mark scrape_result as processed
             cur.execute("""
-                UPDATE scrape_results
+                UPDATE scr_scrape_results
                 SET processing_status = 'processed'
                 WHERE id = %s
             """, (scrape_result_id,))
@@ -138,7 +138,7 @@ class Parser:
     def get_unit_listing_id(self, queue_id):
         # Helper to get unit_listing_id from queue
         with get_cursor(self.conn) as cur:
-             cur.execute("SELECT unit_listing_id FROM scrape_queue WHERE id = %s", (queue_id,))
+             cur.execute("SELECT unit_listing_id FROM scr_scrape_queue WHERE id = %s", (queue_id,))
              res = cur.fetchone()
              return res['unit_listing_id'] if res else None
 
@@ -169,7 +169,7 @@ class Parser:
             self.logger.error(f"Error parsing {url}: {e}")
             # Mark as failed or skip?
             with get_cursor(self.conn, dict_cursor=False) as cur:
-                 cur.execute("UPDATE scrape_results SET processing_status = 'failed', error_message = %s WHERE id = %s", (str(e), scrape_id))
+                 cur.execute("UPDATE scr_scrape_results SET processing_status = 'failed', error_message = %s WHERE id = %s", (str(e), scrape_id))
                  self.conn.commit()
 
         return True

@@ -21,11 +21,11 @@ class Scraper:
         with get_cursor(self.conn) as cur:
             cur.execute("""
                 SELECT id, url, unit_listing_id, retry_count, depth
-                FROM scrape_queue
+                FROM scr_scrape_queue
                 WHERE status = 'pending'
                   AND next_scrape_at <= NOW()
                   AND url NOT LIKE ANY(
-                      SELECT '%' || domain || '%' FROM domain_blacklist
+                      SELECT '%' || domain || '%' FROM scr_domain_blacklist
                   )
                 ORDER BY priority DESC, added_at ASC
                 LIMIT %s
@@ -40,13 +40,13 @@ class Scraper:
             with get_cursor(conn, dict_cursor=False) as cur:
                 if retry_count is not None:
                     cur.execute("""
-                        UPDATE scrape_queue
+                        UPDATE scr_scrape_queue
                         SET status = %s, retry_count = %s, next_scrape_at = %s
                         WHERE id = %s
                     """, (status, retry_count, next_scrape_at, queue_id))
                 else:
                     cur.execute("""
-                        UPDATE scrape_queue SET status = %s WHERE id = %s
+                        UPDATE scr_scrape_queue SET status = %s WHERE id = %s
                     """, (status, queue_id))
                 conn.commit()
         finally:
@@ -62,7 +62,7 @@ class Scraper:
                     lang, lang_conf = detect_language(scrape_result['html'])
 
                 cur.execute("""
-                    INSERT INTO scrape_results
+                    INSERT INTO scr_scrape_results
                     (queue_id, url, html, status_code, headers, ip_address,
                      redirected_from, detected_language, language_confidence, error_message)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -87,7 +87,7 @@ class Scraper:
              domain = extract_domain(parent_url)
              max_depth = 2
              with get_cursor(conn) as cur:
-                 cur.execute("SELECT max_depth FROM domain_multipage_rules WHERE domain = %s AND enabled = TRUE", (domain,))
+                 cur.execute("SELECT max_depth FROM scr_domain_multipage_rules WHERE domain = %s AND enabled = TRUE", (domain,))
                  row = cur.fetchone()
                  if row: max_depth = row['max_depth']
 
@@ -97,7 +97,7 @@ class Scraper:
              with get_cursor(conn, dict_cursor=False) as cur:
                  for url, category in promising:
                      cur.execute("""
-                        INSERT INTO scrape_queue
+                        INSERT INTO scr_scrape_queue
                         (url, unit_listing_id, parent_scrape_id, depth, priority)
                         VALUES (%s, %s, %s, %s, 5)
                         ON CONFLICT (url, unit_listing_id) DO NOTHING

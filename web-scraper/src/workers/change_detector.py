@@ -17,7 +17,7 @@ class ChangeDetector:
         with get_cursor(self.conn) as cur:
             cur.execute("""
                 SELECT id, data, extracted_at
-                FROM parsed_data
+                FROM scr_parsed_data
                 WHERE unit_listing_id = %s
                 ORDER BY extracted_at DESC
                 LIMIT 2
@@ -64,7 +64,7 @@ class ChangeDetector:
         with get_cursor(self.conn, dict_cursor=False) as cur:
             for field, old_val, new_val in changes:
                 cur.execute("""
-                    INSERT INTO change_history
+                    INSERT INTO scr_change_history
                     (unit_listing_id, field_name, old_value, new_value)
                     VALUES (%s, %s, %s, %s)
                 """, (unit_listing_id, field, old_val, new_val))
@@ -100,7 +100,7 @@ class ChangeDetector:
         with get_cursor(self.conn) as cur:
             cur.execute("""
                 SELECT unit_listing_id, COUNT(*) as cnt
-                FROM parsed_data
+                FROM scr_parsed_data
                 WHERE unit_listing_id IS NOT NULL
                 GROUP BY unit_listing_id
                 HAVING COUNT(*) >= 2
