@@ -16,7 +16,7 @@ class ChangeDetector:
         """Získá 2 nejnovější parsovaná data pro listing"""
         with get_cursor(self.conn) as cur:
             cur.execute("""
-                SELECT id, data, extracted_at
+                SELECT parsed_id, data, extracted_at
                 FROM scr_parsed_data
                 WHERE uni_listing_id = %s
                 ORDER BY extracted_at DESC
@@ -121,6 +121,7 @@ class ChangeDetector:
 
         new_data = results[0]['data']
         old_data = results[1]['data']
+        new_parsed_id = results[0]['parsed_id']
 
         self.logger.info(f"Checking changes for listing {uni_listing_id}")
 
@@ -131,6 +132,11 @@ class ChangeDetector:
             self.logger.info(f"  -> Found {len(changes)} changes")
             self.save_changes(uni_listing_id, changes)
             self.notify_change(uni_listing_id, changes)
+        else:
+            self.logger.info(f"  -> No changes detected, deleting duplicate version (parsed_id: {new_parsed_id})")
+            with get_cursor(self.conn, dict_cursor=False) as cur:
+                cur.execute("DELETE FROM scr_parsed_data WHERE parsed_id = %s", (new_parsed_id,))
+                self.conn.commit()
 
         return True
 

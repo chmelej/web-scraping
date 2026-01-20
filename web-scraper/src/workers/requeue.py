@@ -19,7 +19,7 @@ class RequeueWorker:
             cur.execute("""
                 SELECT DISTINCT pd.uni_listing_id, sr.url
                 FROM scr_parsed_data pd
-                JOIN scr_scrape_results sr ON sr.id = pd.scrape_result_id
+                JOIN scr_scrape_results sr ON sr.result_id = pd.result_id
                 WHERE pd.quality_score > 50
                   AND pd.extracted_at < NOW() - INTERVAL '%s days'
                   AND sr.url NOT IN (

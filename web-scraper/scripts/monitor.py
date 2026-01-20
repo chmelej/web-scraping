@@ -110,8 +110,8 @@ def blacklist():
         click.echo(f"{row[0]:<20} {row[1]:>8} {row[2]:>10.1f}")
 
 @cli.command()
-@click.argument('unit_listing_id', type=int)
-def listing(unit_listing_id):
+@click.argument('uni_listing_id', type=str)
+def listing(uni_listing_id):
     """Detail konkrétního listingu"""
     conn = get_db_connection()
     cur = conn.cursor()
@@ -120,19 +120,19 @@ def listing(unit_listing_id):
     cur.execute("""
         SELECT data, quality_score, extracted_at, content_language
         FROM scr_parsed_data
-        WHERE unit_listing_id = %s
+        WHERE uni_listing_id = %s
         ORDER BY extracted_at DESC
         LIMIT 1
-    """, (unit_listing_id,))
+    """, (uni_listing_id,))
 
     row = cur.fetchone()
     if not row:
-        click.echo(f"No data for listing {unit_listing_id}")
+        click.echo(f"No data for listing {uni_listing_id}")
         return
 
     data, quality, extracted, lang = row
 
-    click.echo(f"=== Listing {unit_listing_id} ===")
+    click.echo(f"=== Listing {uni_listing_id} ===")
     click.echo(f"Language: {lang}")
     click.echo(f"Quality: {quality}/100")
     click.echo(f"Last scraped: {extracted}")
@@ -144,10 +144,10 @@ def listing(unit_listing_id):
     cur.execute("""
         SELECT field_name, old_value, new_value, detected_at
         FROM scr_change_history
-        WHERE unit_listing_id = %s
+        WHERE uni_listing_id = %s
         ORDER BY detected_at DESC
         LIMIT 10
-    """, (unit_listing_id,))
+    """, (uni_listing_id,))
 
     for row in cur.fetchall():
         click.echo(f"\n{row[3]} - {row[0]}:")

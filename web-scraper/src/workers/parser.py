@@ -21,9 +21,9 @@ class Parser:
         """Získá další scrape_result k parsování"""
         with get_cursor(self.conn) as cur:
             cur.execute("""
-                SELECT r.id, r.html, r.detected_language, r.url, r.queue_id, q.depth
+                SELECT r.result_id, r.html, r.detected_language, r.url, r.queue_id, q.depth, q.opco
                 FROM scr_scrape_results r
-                LEFT JOIN scr_scrape_queue q ON r.queue_id = q.id
+                LEFT JOIN scr_scrape_queue q ON r.queue_id = q.queue_id
                 WHERE r.processing_status = 'new'
                   AND r.html IS NOT NULL
                 ORDER BY r.scraped_at ASC
@@ -134,19 +134,19 @@ class Parser:
 
         return min(score, 100)
 
-    def save_parsed_data(self, scrape_result_id, uni_listing_id, data, language):
+    def save_parsed_data(self, result_id, uni_listing_id, data, language, opco=None):
         """Uloží parsed data"""
         quality_score = self.calculate_quality_score(data, language)
 
         with get_cursor(self.conn, dict_cursor=False) as cur:
             cur.execute("""
                 INSERT INTO scr_parsed_data
-                (scrape_result_id, uni_listing_id, content_language, data, quality_score)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id
+                (result_id, uni_listing_id, content_language, data, quality_score, opco)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING parsed_id
             """, (
-                scrape_result_id, uni_listing_id, language,
-                json.dumps(data), quality_score
+                result_id, uni_listing_id, language,
+                json.dumps(data), quality_score, opco
             ))
 
             parsed_id = cur.fetchone()[0]
@@ -155,8 +155,8 @@ class Parser:
             cur.execute("""
                 UPDATE scr_scrape_results
                 SET processing_status = 'processed'
-                WHERE id = %s
-            """, (scrape_result_id,))
+                WHERE result_id = %s
+            """, (result_id,))
 
             self.conn.commit()
             return parsed_id
@@ -164,11 +164,11 @@ class Parser:
     def get_uni_listing_id(self, queue_id):
         # Helper to get uni_listing_id from queue
         with get_cursor(self.conn) as cur:
-             cur.execute("SELECT uni_listing_id FROM scr_scrape_queue WHERE id = %s", (queue_id,))
+             cur.execute("SELECT uni_listing_id FROM scr_scrape_queue WHERE queue_id = %s", (queue_id,))
              res = cur.fetchone()
              return res['uni_listing_id'] if res else None
 
-    def add_subpages_to_queue(self, uni_listing_id, parent_scrape_id, depth, promising_links):
+    def add_subpages_to_queue(self, uni_listing_id, parent_scrape_id, depth, promising_links, opco=None):
         """Add promising links to queue"""
         if not promising_links:
             return
@@ -177,10 +177,10 @@ class Parser:
             for url, category in promising_links:
                 cur.execute("""
                     INSERT INTO scr_scrape_queue
-                    (url, uni_listing_id, parent_scrape_id, depth, priority)
-                    VALUES (%s, %s, %s, %s, 5)
+                    (url, uni_listing_id, parent_scrape_id, depth, priority, opco)
+                    VALUES (%s, %s, %s, %s, 5, %s)
                     ON CONFLICT (url) DO NOTHING
-                """, (url, uni_listing_id, parent_scrape_id, depth + 1))
+                """, (url, uni_listing_id, parent_scrape_id, depth + 1, opco))
             self.conn.commit()
         
         self.logger.info(f"  -> Added {len(promising_links)} sub-pages to queue")
@@ -191,12 +191,13 @@ class Parser:
         if not item:
             return False
 
-        scrape_id = item['id']
+        result_id = item['result_id']
         html = item['html']
         language = item['detected_language']
         url = item['url']
         queue_id = item['queue_id']
         depth = item.get('depth') or 0 # Default to 0 if null
+        opco = item.get('opco')
 
         self.logger.info(f"Parsing: {url} ({language})")
 
@@ -209,7 +210,7 @@ class Parser:
             uni_listing_id = self.get_uni_listing_id(queue_id)
 
             # Save
-            self.save_parsed_data(scrape_id, uni_listing_id, data, language)
+            self.save_parsed_data(result_id, uni_listing_id, data, language, opco)
             
             # Find and add subpages
             # Check max depth first? Assume max depth is handled by scraper usually, 
@@ -218,16 +219,16 @@ class Parser:
             if depth < 2:
                 promising = find_promising_links(html, url, language, country)
                 if promising:
-                    # Need parent_scrape_id -> scrape_id (this result is the parent of the new subpage)
+                    # Need parent_scrape_id -> result_id (this result is the parent of the new subpage)
                     # Actually scrape_queue.parent_scrape_id refers to scrape_results.id of parent?
                     # Schema says: parent_scrape_id INTEGER. Probably yes.
-                    self.add_subpages_to_queue(uni_listing_id, scrape_id, depth, promising)
+                    self.add_subpages_to_queue(uni_listing_id, result_id, depth, promising, opco)
 
         except Exception as e:
             self.logger.error(f"Error parsing {url}: {e}", exc_info=True)
             # Mark as failed or skip?
             with get_cursor(self.conn, dict_cursor=False) as cur:
-                 cur.execute("UPDATE scr_scrape_results SET processing_status = 'failed', error_message = %s WHERE id = %s", (str(e), scrape_id))
+                 cur.execute("UPDATE scr_scrape_results SET processing_status = 'failed', error_message = %s WHERE result_id = %s", (str(e), result_id))
                  self.conn.commit()
 
         return True

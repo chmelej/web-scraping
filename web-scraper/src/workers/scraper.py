@@ -50,7 +50,7 @@ class Scraper:
         self.logger.debug(f"Fetching batch of {batch_size} URLs...")
         with get_cursor(self.conn) as cur:
             cur.execute("""
-                SELECT id, url, uni_listing_id, retry_count, depth
+                SELECT queue_id, url, uni_listing_id, opco, retry_count, depth
                 FROM scr_scrape_queue
                 WHERE status = 'pending'
                   AND next_scrape_at <= NOW()
@@ -88,7 +88,7 @@ class Scraper:
                 cur.execute(f"""
                     UPDATE scr_scrape_queue
                     SET {', '.join(updates)}
-                    WHERE id = %s
+                    WHERE queue_id = %s
                 """, tuple(params))
                 conn.commit()
         finally:
@@ -109,7 +109,7 @@ class Scraper:
                     (queue_id, url, html, status_code, headers, ip_address,
                      redirected_from, detected_language, language_confidence, error_message)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
+                    RETURNING result_id
                 """, (
                     queue_id, url, scrape_result.get('html'), scrape_result.get('status_code'),
                     json.dumps(scrape_result.get('headers')) if scrape_result.get('headers') else None,
@@ -262,15 +262,16 @@ class Scraper:
         self.logger.info(f"Processing one: {item['url']}")
 
         # Mark as processing
-        self.update_queue_status_sync(item['id'], 'processing')
+        self.update_queue_status_sync(item['queue_id'], 'processing')
 
         request_list = [
             Request.from_url(
                 item['url'],
                 user_data={
-                    "queue_id": item['id'],
+                    "queue_id": item['queue_id'],
                     "retry_count": item['retry_count'],
                     "uni_listing_id": item['uni_listing_id'],
+                    "opco": item.get('opco'),
                     "depth": item['depth']
                 }
             )
@@ -330,14 +331,15 @@ class Scraper:
             request_list = []
             for item in batch:
                 # Mark as processing immediately
-                self.update_queue_status_sync(item['id'], 'processing')
+                self.update_queue_status_sync(item['queue_id'], 'processing')
                 request_list.append(
                     Request.from_url(
                         item['url'],
                         user_data={
-                            "queue_id": item['id'],
+                            "queue_id": item['queue_id'],
                             "retry_count": item['retry_count'],
                             "uni_listing_id": item['uni_listing_id'],
+                            "opco": item.get('opco'),
                             "depth": item['depth']
                         }
                     )
