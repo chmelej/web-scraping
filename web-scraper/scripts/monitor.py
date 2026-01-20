@@ -22,7 +22,7 @@ def health():
 
     # Queue status
     click.echo("=== Queue Status ===")
-    cur.execute("SELECT * FROM scraping_health")
+    cur.execute("SELECT * FROM scr_scraping_health")
     for row in cur.fetchall():
         click.echo(f"{row[0]:<12} {row[1]:>6} (avg retries: {row[2]:.1f})")
 
@@ -32,7 +32,7 @@ def health():
         SELECT
             COUNT(*) as scrapes,
             COUNT(DISTINCT detected_language) as languages
-        FROM scrape_results
+        FROM scr_scrape_results
         WHERE scraped_at > NOW() - INTERVAL '24 hours'
     """)
     row = cur.fetchone()
@@ -41,7 +41,7 @@ def health():
 
     # Parsing backlog
     cur.execute("""
-        SELECT COUNT(*) FROM scrape_results
+        SELECT COUNT(*) FROM scr_scrape_results
         WHERE processing_status = 'new'
     """)
     backlog = cur.fetchone()[0]
@@ -57,7 +57,7 @@ def stats(days):
     click.echo(f"=== Stats for last {days} days ===\n")
 
     cur.execute(f"""
-        SELECT * FROM daily_stats
+        SELECT * FROM scr_daily_stats
         WHERE date > CURRENT_DATE - {days}
         ORDER BY date DESC
     """)
@@ -73,7 +73,7 @@ def quality():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM quality_distribution")
+    cur.execute("SELECT * FROM scr_quality_distribution")
 
     click.echo("=== Quality Distribution ===")
     for row in cur.fetchall():
@@ -85,7 +85,7 @@ def changes():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM recent_changes LIMIT 20")
+    cur.execute("SELECT * FROM scr_recent_changes LIMIT 20")
 
     click.echo("=== Recent Changes (Top 20) ===")
     click.echo(f"{'Listing ID':<12} {'Field':<20} {'Count':>6} {'Last Change'}")
@@ -100,7 +100,7 @@ def blacklist():
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM blacklist_summary")
+    cur.execute("SELECT * FROM scr_blacklist_summary")
 
     click.echo("=== Blacklist Summary ===")
     click.echo(f"{'Reason':<20} {'Domains':>8} {'Avg Fails':>10}")
@@ -119,7 +119,7 @@ def listing(unit_listing_id):
     # Latest data
     cur.execute("""
         SELECT data, quality_score, extracted_at, content_language
-        FROM parsed_data
+        FROM scr_parsed_data
         WHERE unit_listing_id = %s
         ORDER BY extracted_at DESC
         LIMIT 1
@@ -143,7 +143,7 @@ def listing(unit_listing_id):
     click.echo("\n=== Recent Changes ===")
     cur.execute("""
         SELECT field_name, old_value, new_value, detected_at
-        FROM change_history
+        FROM scr_change_history
         WHERE unit_listing_id = %s
         ORDER BY detected_at DESC
         LIMIT 10

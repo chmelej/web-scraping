@@ -6,19 +6,21 @@ System for scraping company data from websites.
 
 1. Install dependencies:
    ```bash
-   pip install .
-   # or with uv
    uv sync
    ```
 
-2. Setup Database:
+2. Install Playwright browser (Chromium only):
+   ```bash
+   uv run playwright install chromium
+   ```
+
+3. Setup Database:
    - Create PostgreSQL database
    - Run migrations in `migrations/`
 
-3. Configuration:
+4. Configuration:
    - Copy `.env.example` to `.env`
    - Adjust settings
 
-4. Run Workers:
-   - `python src/workers/scraper.py`
-   - `python src/workers/parser.py`
+5. Run Workers:
+   - `./run_all.sh` or individual `./run_*.sh` scripts

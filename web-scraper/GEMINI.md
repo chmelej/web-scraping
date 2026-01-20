@@ -7,7 +7,7 @@ I am a specialized Software Engineering Agent acting within this project to auto
 *   **Language:** Python 3.10+
 *   **Package Manager:** [uv](https://github.com/astral-sh/uv)
 *   **Database:** PostgreSQL (using `psycopg2-binary`)
-*   **Scraping Engine:** [Crawlee for Python](https://crawlee.dev/python/) with [Playwright](https://playwright.dev/python/)
+*   **Scraping Engine:** [Crawlee for Python](https://crawlee.dev/python/) with [Playwright](https://playwright.dev/python/) (Note: Use `uv run playwright install chromium` to install only the necessary browser)
 *   **Parsing:** BeautifulSoup4, lxml, Langdetect
 *   **Data Structures:** Bloom Filters (via `profusion`)
 *   **Testing:** Pytest

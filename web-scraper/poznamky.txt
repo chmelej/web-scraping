@@ -1,4 +1,16 @@
+## Hotovo
 - pri testovani nefunguje scaper
 - spatne pojmenovany sloupec s/unit_listing_id/uni_listing_id/
+- spatne pojmenovany klic v json s/ico/org_num/ kazda zeme tomu rika jinak. naktere zeme maji tech identifikatoru vic, napr: ICO, VAT_ID, chamber of commerce number, business_id, ...
 - vsechny tabulky by meli mit prefix 'scr_'
-- bloom filtery jsou uplne jine nez potrebuju
+- bloom filtery jsou uplne jine nez potrebuju, ja pomoci bloom filteru budu hledat adresy a klicova slova. 
+- telefony a org_num je lepsi hledat pomoci regexp
+- obcas se muze zamotat telefoni cislo a org_num. orgnum pro nektere zame (CZ,BE,...) obsahuje kontrolni algoritmus k detekci chyb to by se mohlo pouuzit.
+
+## TODO
+- preferuji kdyz sloupecky v tabulkach s FK maji pokud mozno stejny nazev. takze kdyz ma tabulka sloupec id je to spatne. napr  `scr_scrape_queue.id` by mela byt scr_scrape_queue.queue_id. je potreba opravit nazvy sloupecku.
+- udrzovaci procedura v prubehu roku muzeme ziskat nekolik verzi teze stranky, pokud je stara a nova verze identicka nechame si starou a novou prestaneme procesovat (nebo ji rovnou smazeme), fakt ze se stranka dlouho nemeni je taky dulezity ukazatel. pokud se stranka meni staci nam udrzovat 3 historicke verze. starsi verze muzeme smazat.
+- pokud ve fronte mame stejnou url jednou https a jednou http (a https vraci 200) tak http muzeme zahodit!
+- na serveru je asi potreba nainstalovat jeste knihovny `sudo apt-get install libx11-xcb1 libxrandr2 libxcomposite1 libxcursor1 libxdamage1 libxfixes3 libxi6 libgtk-3-0 libatk1.0-0 libcairo-gobject2 libgdk-pixbuf2.0-0 libgbm-dev`
+- url pred vlozenim do fronty bychom meli zbavit analytickych atributu (nechceme je)
+- k uni_listing_id pridat i sloupecek opco [be,nl,sk, ...] at vime kam to nasledne posilat

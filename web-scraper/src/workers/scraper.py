@@ -2,6 +2,11 @@ import asyncio
 import json
 import time
 import socket
+import logging
+import shutil
+import glob
+import tempfile
+import os
 from datetime import datetime, timedelta
 from crawlee.crawlers import PlaywrightCrawler
 from crawlee import Request
@@ -16,6 +21,28 @@ class Scraper:
     def __init__(self):
         self.conn = get_db_connection()
         self.logger = setup_logging('scraper', f'{LOG_DIR}/scraper.log')
+        # Suppress verbose Crawlee errors (stack traces for 404s/DNS)
+        logging.getLogger('crawlee.crawlers._playwright._playwright_crawler').setLevel(logging.CRITICAL)
+
+    def cleanup_temp_dirs(self):
+        """Clean up temporary directories created by Playwright/Crawlee"""
+        try:
+            tmp_dir = tempfile.gettempdir()
+            # Pattern observed by user
+            pattern = os.path.join(tmp_dir, "apify-playwright-*") 
+            count = 0
+            for path in glob.glob(pattern):
+                # Safety: check if it looks like a temp dir and is a directory
+                if os.path.isdir(path):
+                    try:
+                        shutil.rmtree(path, ignore_errors=True)
+                        count += 1
+                    except Exception:
+                        pass
+            if count > 0:
+                self.logger.debug(f"Cleaned up {count} temporary Playwright directories")
+        except Exception as e:
+            self.logger.warning(f"Failed to clean up temp dirs: {e}")
 
     def fetch_batch(self, batch_size=10):
         """Fetch batch of URLs from DB"""
@@ -73,7 +100,7 @@ class Scraper:
         conn = get_db_connection()
         try:
             with get_cursor(conn, dict_cursor=False) as cur:
-                lang, lang_conf = 'unknown', 0.0
+                lang, lang_conf = None, 0.0
                 if scrape_result.get('html'):
                     lang, lang_conf = detect_language(scrape_result['html'])
 
@@ -182,7 +209,8 @@ class Scraper:
                 await loop.run_in_executor(None, self.add_subpages_sync, result_id, request.url, content, lang, uni_listing_id, depth)
 
         except Exception as e:
-            self.logger.error(f"Error scraping {request.url}: {e}", exc_info=True)
+            # Log as warning without stack trace for expected scraping errors
+            self.logger.warning(f"Error scraping {request.url}: {e}")
             result['error'] = str(e)
 
             loop = asyncio.get_running_loop()
@@ -201,7 +229,8 @@ class Scraper:
         queue_id = request.user_data['queue_id']
         retry_count = request.user_data['retry_count']
         
-        self.logger.error(f"Request failed for {request.url}: {error}")
+        # Simple one-line warning
+        self.logger.warning(f"Page unavailable: {request.url} ({error})")
         
         result = {
             'html': None,
@@ -255,6 +284,10 @@ class Scraper:
                 headless=PLAYWRIGHT_HEADLESS,
                 request_handler_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
                 browser_launch_options={"args": ["--no-sandbox"]},
+                goto_options={
+                    "waitUntil": "domcontentloaded",
+                    "timeout": 15000
+                },
             )
             crawler.failed_request_handler = self.failed_request_handler
             self.logger.debug("Running crawler")
@@ -283,19 +316,10 @@ class Scraper:
     async def run(self):
         self.logger.info("Starting Crawlee Scraper...")
 
-        # Configure Crawler with masking features
-        crawler = PlaywrightCrawler(
-            request_handler=self.request_handler,
-            max_requests_per_crawl=50,
-            headless=PLAYWRIGHT_HEADLESS,
-            request_handler_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
-            browser_launch_options={"args": ["--no-sandbox"]},
-        )
-        crawler.failed_request_handler = self.failed_request_handler
-
         while True:
             # Fetch batch
-            batch = self.fetch_batch(10)
+            # Increased batch size to 100 to reduce browser restart overhead and temp file accumulation
+            batch = self.fetch_batch(100)
             if not batch:
                 self.logger.info("Queue empty, waiting...")
                 await asyncio.sleep(60)
@@ -319,8 +343,27 @@ class Scraper:
                     )
                 )
 
+            # Configure Crawler with masking features
+            # Create a new instance for each batch to avoid reuse issues
+            crawler = PlaywrightCrawler(
+                request_handler=self.request_handler,
+                max_requests_per_crawl=100,
+                headless=PLAYWRIGHT_HEADLESS,
+                browser_type='chromium', # Explicitly use chromium
+                request_handler_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
+                browser_launch_options={"args": ["--no-sandbox"]},
+                goto_options={
+                    "waitUntil": "domcontentloaded",
+                    "timeout": 15000
+                },
+            )
+            crawler.failed_request_handler = self.failed_request_handler
+
             # Run crawler on this batch
             await crawler.run(request_list)
+            
+            # Clean up temp files after batch
+            self.cleanup_temp_dirs()
 
 if __name__ == '__main__':
     scraper = Scraper()
