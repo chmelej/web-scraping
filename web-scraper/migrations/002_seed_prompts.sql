@@ -1,6 +1,6 @@
 -- Seed Prompts
 
-INSERT INTO llm_prompts (use_case, language, prompt_template, system_prompt, model, notes) VALUES
+INSERT INTO scr_llm_prompts (use_case, language, prompt_template, system_prompt, model, notes) VALUES
 
 ('opening_hours', 'cs',
 'Převeď následující text otevírací doby do JSON formátu.

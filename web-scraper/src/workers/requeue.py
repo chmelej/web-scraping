@@ -16,17 +16,17 @@ class RequeueWorker:
         with get_cursor(self.conn, dict_cursor=False) as cur:
             # Get listings to requeue
             cur.execute("""
-                SELECT DISTINCT pd.unit_listing_id, sr.url
-                FROM parsed_data pd
-                JOIN scrape_results sr ON sr.id = pd.scrape_result_id
+                SELECT DISTINCT pd.uni_listing_id, sr.url
+                FROM scr_parsed_data pd
+                JOIN scr_scrape_results sr ON sr.id = pd.scrape_result_id
                 WHERE pd.quality_score > 50
                   AND pd.extracted_at < NOW() - INTERVAL '%s days'
                   AND sr.url NOT IN (
-                      SELECT url FROM domain_blacklist
+                      SELECT url FROM scr_domain_blacklist
                       WHERE auto_added = TRUE
                   )
                   AND NOT EXISTS (
-                      SELECT 1 FROM scrape_queue sq
+                      SELECT 1 FROM scr_scrape_queue sq
                       WHERE sq.url = sr.url
                         AND sq.status IN ('pending', 'processing')
                   )
@@ -36,17 +36,17 @@ class RequeueWorker:
 
             # Re-add to queue
             count = 0
-            for unit_listing_id, url in results:
+            for uni_listing_id, url in results:
                 next_scrape = datetime.now() + timedelta(days=days_old)
 
                 cur.execute("""
-                    INSERT INTO scrape_queue
-                    (url, unit_listing_id, next_scrape_at, priority)
+                    INSERT INTO scr_scrape_queue
+                    (url, uni_listing_id, next_scrape_at, priority)
                     VALUES (%s, %s, %s, 1)
-                    ON CONFLICT (url, unit_listing_id) DO UPDATE
+                    ON CONFLICT (url, uni_listing_id) DO UPDATE
                     SET next_scrape_at = EXCLUDED.next_scrape_at,
                         status = 'pending'
-                """, (url, unit_listing_id, next_scrape))
+                """, (url, uni_listing_id, next_scrape))
 
                 count += 1
 

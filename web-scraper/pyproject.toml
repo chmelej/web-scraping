@@ -18,6 +18,8 @@ dependencies = [
     "pybloom-live",
     "requests",
     "datefinder",
+    "browserforge",
+    "apify-fingerprint-datapoints",
 ]
 
 [project.optional-dependencies]

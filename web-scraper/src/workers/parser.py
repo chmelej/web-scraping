@@ -18,7 +18,7 @@ class Parser:
         with get_cursor(self.conn) as cur:
             cur.execute("""
                 SELECT id, html, detected_language, url, queue_id
-                FROM scrape_results
+                FROM scr_scrape_results
                 WHERE processing_status = 'new'
                   AND html IS NOT NULL
                 ORDER BY scraped_at ASC
@@ -108,18 +108,18 @@ class Parser:
 
         return min(score, 100)
 
-    def save_parsed_data(self, scrape_result_id, unit_listing_id, data, language):
+    def save_parsed_data(self, scrape_result_id, uni_listing_id, data, language):
         """Uloží parsed data"""
         quality_score = self.calculate_quality_score(data, language)
 
         with get_cursor(self.conn, dict_cursor=False) as cur:
             cur.execute("""
-                INSERT INTO parsed_data
-                (scrape_result_id, unit_listing_id, content_language, data, quality_score)
+                INSERT INTO scr_parsed_data
+                (scrape_result_id, uni_listing_id, content_language, data, quality_score)
                 VALUES (%s, %s, %s, %s, %s)
                 RETURNING id
             """, (
-                scrape_result_id, unit_listing_id, language,
+                scrape_result_id, uni_listing_id, language,
                 json.dumps(data), quality_score
             ))
 
@@ -127,7 +127,7 @@ class Parser:
 
             # Mark scrape_result as processed
             cur.execute("""
-                UPDATE scrape_results
+                UPDATE scr_scrape_results
                 SET processing_status = 'processed'
                 WHERE id = %s
             """, (scrape_result_id,))
@@ -135,12 +135,12 @@ class Parser:
             self.conn.commit()
             return parsed_id
 
-    def get_unit_listing_id(self, queue_id):
-        # Helper to get unit_listing_id from queue
+    def get_uni_listing_id(self, queue_id):
+        # Helper to get uni_listing_id from queue
         with get_cursor(self.conn) as cur:
-             cur.execute("SELECT unit_listing_id FROM scrape_queue WHERE id = %s", (queue_id,))
+             cur.execute("SELECT uni_listing_id FROM scr_scrape_queue WHERE id = %s", (queue_id,))
              res = cur.fetchone()
-             return res['unit_listing_id'] if res else None
+             return res['uni_listing_id'] if res else None
 
     def process_one(self):
         """Zpracuje jeden scrape result"""
@@ -160,16 +160,16 @@ class Parser:
             # Parse
             data = self.parse_html(html, language, url)
 
-            # Get unit_listing_id
-            unit_listing_id = self.get_unit_listing_id(queue_id)
+            # Get uni_listing_id
+            uni_listing_id = self.get_uni_listing_id(queue_id)
 
             # Save
-            self.save_parsed_data(scrape_id, unit_listing_id, data, language)
+            self.save_parsed_data(scrape_id, uni_listing_id, data, language)
         except Exception as e:
             self.logger.error(f"Error parsing {url}: {e}")
             # Mark as failed or skip?
             with get_cursor(self.conn, dict_cursor=False) as cur:
-                 cur.execute("UPDATE scrape_results SET processing_status = 'failed', error_message = %s WHERE id = %s", (str(e), scrape_id))
+                 cur.execute("UPDATE scr_scrape_results SET processing_status = 'failed', error_message = %s WHERE id = %s", (str(e), scrape_id))
                  self.conn.commit()
 
         return True

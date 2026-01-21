@@ -3,6 +3,7 @@ import json
 import time
 import socket
 from datetime import datetime, timedelta
+from crawlee import Request
 from crawlee.crawlers import PlaywrightCrawler
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.language import detect_language
@@ -20,12 +21,12 @@ class Scraper:
         """Fetch batch of URLs from DB"""
         with get_cursor(self.conn) as cur:
             cur.execute("""
-                SELECT id, url, unit_listing_id, retry_count, depth
-                FROM scrape_queue
+                SELECT id, url, uni_listing_id, retry_count, depth
+                FROM scr_scrape_queue
                 WHERE status = 'pending'
                   AND next_scrape_at <= NOW()
                   AND url NOT LIKE ANY(
-                      SELECT '%' || domain || '%' FROM domain_blacklist
+                      SELECT '%' || domain || '%' FROM scr_domain_blacklist
                   )
                 ORDER BY priority DESC, added_at ASC
                 LIMIT %s
@@ -40,13 +41,13 @@ class Scraper:
             with get_cursor(conn, dict_cursor=False) as cur:
                 if retry_count is not None:
                     cur.execute("""
-                        UPDATE scrape_queue
+                        UPDATE scr_scrape_queue
                         SET status = %s, retry_count = %s, next_scrape_at = %s
                         WHERE id = %s
                     """, (status, retry_count, next_scrape_at, queue_id))
                 else:
                     cur.execute("""
-                        UPDATE scrape_queue SET status = %s WHERE id = %s
+                        UPDATE scr_scrape_queue SET status = %s WHERE id = %s
                     """, (status, queue_id))
                 conn.commit()
         finally:
@@ -62,7 +63,7 @@ class Scraper:
                     lang, lang_conf = detect_language(scrape_result['html'])
 
                 cur.execute("""
-                    INSERT INTO scrape_results
+                    INSERT INTO scr_scrape_results
                     (queue_id, url, html, status_code, headers, ip_address,
                      redirected_from, detected_language, language_confidence, error_message)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -80,14 +81,14 @@ class Scraper:
         finally:
             conn.close()
 
-    def add_subpages_sync(self, parent_id, parent_url, html, language, unit_listing_id, depth):
+    def add_subpages_sync(self, parent_id, parent_url, html, language, uni_listing_id, depth):
          conn = get_db_connection()
          try:
              # get max depth
              domain = extract_domain(parent_url)
              max_depth = 2
              with get_cursor(conn) as cur:
-                 cur.execute("SELECT max_depth FROM domain_multipage_rules WHERE domain = %s AND enabled = TRUE", (domain,))
+                 cur.execute("SELECT max_depth FROM scr_domain_multipage_rules WHERE domain = %s AND enabled = TRUE", (domain,))
                  row = cur.fetchone()
                  if row: max_depth = row['max_depth']
 
@@ -97,11 +98,11 @@ class Scraper:
              with get_cursor(conn, dict_cursor=False) as cur:
                  for url, category in promising:
                      cur.execute("""
-                        INSERT INTO scrape_queue
-                        (url, unit_listing_id, parent_scrape_id, depth, priority)
+                        INSERT INTO scr_scrape_queue
+                        (url, uni_listing_id, parent_scrape_id, depth, priority)
                         VALUES (%s, %s, %s, %s, 5)
-                        ON CONFLICT (url, unit_listing_id) DO NOTHING
-                     """, (url, unit_listing_id, parent_id, depth + 1))
+                        ON CONFLICT (url, uni_listing_id) DO NOTHING
+                     """, (url, uni_listing_id, parent_id, depth + 1))
                  conn.commit()
 
              if promising:
@@ -116,7 +117,7 @@ class Scraper:
         # User data passed via request.user_data
         queue_id = request.user_data['queue_id']
         retry_count = request.user_data['retry_count']
-        unit_listing_id = request.user_data.get('unit_listing_id')
+        uni_listing_id = request.user_data.get('uni_listing_id')
         depth = request.user_data.get('depth', 0)
 
         self.logger.info(f"Processing {request.url}")
@@ -146,9 +147,9 @@ class Scraper:
             await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'completed')
 
             # Subpages
-            if unit_listing_id:
+            if uni_listing_id:
                 lang, _ = detect_language(content)
-                await loop.run_in_executor(None, self.add_subpages_sync, result_id, request.url, content, lang, unit_listing_id, depth)
+                await loop.run_in_executor(None, self.add_subpages_sync, result_id, request.url, content, lang, uni_listing_id, depth)
 
         except Exception as e:
             self.logger.error(f"Error scraping {request.url}: {e}")
@@ -175,15 +176,15 @@ class Scraper:
         # Mark as processing
         self.update_queue_status_sync(item['id'], 'processing')
 
-        request_list = [{
-            "url": item['url'],
-            "user_data": {
+        request_list = [Request(
+            url=item['url'],
+            user_data={
                 "queue_id": item['id'],
                 "retry_count": item['retry_count'],
-                "unit_listing_id": item['unit_listing_id'],
+                "uni_listing_id": item['uni_listing_id'],
                 "depth": item['depth']
             }
-        }]
+        )]
 
         async def run_crawler():
             crawler = PlaywrightCrawler(
@@ -239,15 +240,15 @@ class Scraper:
             for item in batch:
                 # Mark as processing immediately
                 self.update_queue_status_sync(item['id'], 'processing')
-                request_list.append({
-                    "url": item['url'],
-                    "user_data": {
+                request_list.append(Request(
+                    url=item['url'],
+                    user_data={
                         "queue_id": item['id'],
                         "retry_count": item['retry_count'],
-                        "unit_listing_id": item['unit_listing_id'],
+                        "uni_listing_id": item['uni_listing_id'],
                         "depth": item['depth']
                     }
-                })
+                ))
 
             # Run crawler on this batch
             await crawler.run(request_list)
