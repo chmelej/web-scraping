@@ -105,20 +105,15 @@ class Scraper:
                 params = [status]
                 
                 if retry_count is not None:
-                    updates.append("retry_count = %s")
-                    params.append(retry_count)
-                    
-                if next_scrape_at is not None:
-                    updates.append("next_scrape_at = %s")
-                    params.append(next_scrape_at)
-                
-                params.append(queue_id)
-                
-                cur.execute(f"""
-                    UPDATE scr_scrape_queue
-                    SET {', '.join(updates)}
-                    WHERE queue_id = %s
-                """, tuple(params))
+                    cur.execute("""
+                        UPDATE scr_scrape_queue
+                        SET status = %s, retry_count = %s, next_scrape_at = %s
+                        WHERE id = %s
+                    """, (status, retry_count, next_scrape_at, queue_id))
+                else:
+                    cur.execute("""
+                        UPDATE scr_scrape_queue SET status = %s WHERE id = %s
+                    """, (status, queue_id))
                 conn.commit()
         finally:
             conn.close()

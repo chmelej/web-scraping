@@ -91,7 +91,7 @@ class BloomFilterManager:
     def rebuild_from_db(self, filter_name):
         """Rebuil filtru z bloom_filter_items"""
         with get_cursor(self.conn) as cur:
-             cur.execute("SELECT item FROM scr_bloom_filter_itemsWHERE filter_name = %s", (filter_name,))
+             cur.execute("SELECT item FROM scr_bloom_filter_items WHERE filter_name = %s", (filter_name,))
              items = cur.fetchall()
 
              # Delete old filter

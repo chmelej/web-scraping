@@ -51,7 +51,7 @@ def edit(use_case, language):
     # Save
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO llm_prompts (use_case, language, prompt_template)
+        INSERT INTO scr_llm_prompts (use_case, language, prompt_template)
         VALUES (%s, %s, %s)
         ON CONFLICT (use_case, language) DO UPDATE
         SET prompt_template = EXCLUDED.prompt_template
@@ -70,8 +70,8 @@ def stats():
         SELECT p.use_case, p.language,
                SUM(s.executions) as total,
                ROUND(AVG(s.successes::float/NULLIF(s.executions,0)) * 100, 1) as success_rate
-        FROM llm_prompts p
-        LEFT JOIN prompt_stats s ON p.id = s.prompt_id
+        FROM scr_llm_prompts p
+        LEFT JOIN scr_prompt_stats s ON p.id = s.prompt_id
         WHERE s.date > CURRENT_DATE - 7
         GROUP BY p.use_case, p.language
         ORDER BY total DESC NULLS LAST
@@ -93,7 +93,7 @@ def list_all():
 
     cur.execute("""
         SELECT use_case, language, model, is_active
-        FROM llm_prompts
+        FROM scr_llm_prompts
         ORDER BY use_case, language
     """)
 
