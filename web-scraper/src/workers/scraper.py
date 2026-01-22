@@ -383,7 +383,6 @@ class Scraper:
                  loop = None
 
              if loop and loop.is_running():
-                 # This shouldn't happen in normal synchronous call, but if so, we create task
                  future = asyncio.run_coroutine_threadsafe(run_crawler(), loop)
                  future.result()
              else:

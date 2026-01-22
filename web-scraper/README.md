@@ -7,6 +7,16 @@ System for scraping company data from websites.
 1. Install dependencies:
    ```bash
    uv sync
+   # OR
+   pip install .
+   playwright install
+   ```
+
+   **Important:** This project uses `crawlee` for advanced scraping.
+   If you encounter `ModuleNotFoundError: No module named 'crawlee'`, run:
+   ```bash
+   pip install crawlee
+   playwright install
    ```
 
 2. Install Playwright browser (Chromium only):
