@@ -182,7 +182,7 @@ source .venv/bin/activate
 python -c "from src.utils.db import get_db_connection; conn = get_db_connection(); print('DB OK' if conn else 'FAIL')"
 
 # Přidej testovací URL
-python scripts/queue_admin.py add "https://example.com" --unit-id 1 --priority 10
+python scripts/queue_admin.py add "https://example.com" --uni-listing-id "L1234" --priority 10
 
 # Spusť scraper (zpracuje 1 URL a skončí)
 python -c "from src.workers.scraper import Scraper; s = Scraper(); s.process_one()"
@@ -195,7 +195,7 @@ psql -U scraper_user -d web_scraper -h localhost -c \
 python -c "from src.workers.parser import Parser; p = Parser(); p.process_one()"
 
 # Zkontroluj parsovaná data
-python scripts/monitor.py listing 1
+python scripts/monitor.py listing "L1234"
 ```
 
 ### 2. Bulk import URLs
@@ -209,7 +209,7 @@ https://wikipedia.org
 EOF
 
 # Import
-python scripts/queue_admin.py bulk-add /tmp/urls.txt --unit-id 1
+python scripts/queue_admin.py bulk-add /tmp/urls.txt --uni-listing-id "L1234"
 ```
 
 ---

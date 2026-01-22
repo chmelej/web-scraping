@@ -15,9 +15,9 @@ def cli():
 
 @cli.command()
 @click.argument('url')
-@click.option('--unit-id', type=int, help='Unit listing ID')
+@click.option('--uni-listing-id', type=str, help='Universal listing ID')
 @click.option('--priority', default=0, help='Priority (higher = sooner)')
-def add(url, unit_id, priority):
+def add(url, uni_listing_id, priority):
     """Přidej URL do fronty"""
     conn = get_db_connection()
     cur = conn.cursor()
@@ -25,14 +25,14 @@ def add(url, unit_id, priority):
     normalized = normalize_url(url)
 
     cur.execute("""
-        INSERT INTO scrape_queue (url, unit_listing_id, priority)
+        INSERT INTO scr_scrape_queue (url, uni_listing_id, priority)
         VALUES (%s, %s, %s)
-        ON CONFLICT (url, unit_listing_id) DO UPDATE
+        ON CONFLICT (url) DO UPDATE
         SET priority = EXCLUDED.priority,
             status = 'pending',
             next_scrape_at = NOW()
-        RETURNING id
-    """, (normalized, unit_id, priority))
+        RETURNING queue_id
+    """, (normalized, uni_listing_id, priority))
 
     queue_id = cur.fetchone()[0]
     conn.commit()
@@ -41,8 +41,8 @@ def add(url, unit_id, priority):
 
 @cli.command()
 @click.argument('file', type=click.File('r'))
-@click.option('--unit-id', type=int, help='Default unit listing ID')
-def bulk_add(file, unit_id):
+@click.option('--uni-listing-id', type=str, help='Default universal listing ID')
+def bulk_add(file, uni_listing_id):
     """Bulk import URLs ze souboru (jeden per řádek)"""
     conn = get_db_connection()
     cur = conn.cursor()
@@ -54,10 +54,10 @@ def bulk_add(file, unit_id):
         try:
             normalized = normalize_url(url)
             cur.execute("""
-                INSERT INTO scrape_queue (url, unit_listing_id)
+                INSERT INTO scr_scrape_queue (url, uni_listing_id)
                 VALUES (%s, %s)
                 ON CONFLICT DO NOTHING
-            """, (normalized, unit_id))
+            """, (normalized, uni_listing_id))
             added += 1
         except Exception as e:
             click.echo(f"Error adding {url}: {e}")
@@ -75,9 +75,9 @@ def remove(url):
     normalized = normalize_url(url)
 
     cur.execute("""
-        DELETE FROM scrape_queue
+        DELETE FROM scr_scrape_queue
         WHERE url = %s
-        RETURNING id
+        RETURNING queue_id
     """, (normalized,))
 
     if cur.fetchone():
@@ -94,11 +94,11 @@ def clear(status):
     cur = conn.cursor()
 
     if status:
-        cur.execute("DELETE FROM scrape_queue WHERE status = %s", (status,))
+        cur.execute("DELETE FROM scr_scrape_queue WHERE status = %s", (status,))
     else:
         if not click.confirm("Clear entire queue?"):
             return
-        cur.execute("DELETE FROM scrape_queue")
+        cur.execute("DELETE FROM scr_scrape_queue")
 
     count = cur.rowcount
     conn.commit()
@@ -112,7 +112,7 @@ def reset_failed():
     cur = conn.cursor()
 
     cur.execute("""
-        UPDATE scrape_queue
+        UPDATE scr_scrape_queue
         SET status = 'pending',
             retry_count = 0,
             next_scrape_at = NOW()
@@ -133,7 +133,7 @@ def blacklist(domain, reason):
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO domain_blacklist
+        INSERT INTO scr_domain_blacklist
         (domain, reason, auto_added, notes)
         VALUES (%s, %s, FALSE, 'Added manually')
         ON CONFLICT (domain) DO UPDATE
@@ -150,7 +150,7 @@ def whitelist(domain):
     conn = get_db_connection()
     cur = conn.cursor()
 
-    cur.execute("DELETE FROM domain_blacklist WHERE domain = %s", (domain,))
+    cur.execute("DELETE FROM scr_domain_blacklist WHERE domain = %s", (domain,))
 
     if cur.rowcount:
         conn.commit()

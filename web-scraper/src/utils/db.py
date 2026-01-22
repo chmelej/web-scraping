@@ -4,7 +4,9 @@ from config.settings import DATABASE_URL
 
 def get_db_connection():
     """Vytvoř DB connection"""
-    return psycopg2.connect(DATABASE_URL)
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
+    return conn
 
 def get_cursor(conn, dict_cursor=True):
     """Vytvoř cursor"""
