@@ -18,10 +18,10 @@ def detect_language(html):
     text = ' '.join(text.split())[:10000]
 
     if len(text) < 50:
-        return 'unknown', 0.0
+        return None, 0.0
 
     try:
         results = detect_langs(text)
         return results[0].lang, results[0].prob
     except:
-        return 'unknown', 0.0
+        return None, 0.0

@@ -1,1 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv/
+env/
+logs/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+.DS_Store
 /web-scraper/uv.lock
+/web-scraper/storage/

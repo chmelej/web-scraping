@@ -1,0 +1,55 @@
+└───────────────────────────────┴──────────────────────────────────┘
+--- Logging error ---
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 15.
+--- Logging error ---
+[crawlee._autoscaling.autoscaled_pool] INFO  current_concurrency = 9; desired_concurrency = 15; cpu = 0.0; mem = 0.0; event_loop = 0.0; client_info = 0.0
+--- Logging error ---
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 15.
+--- Logging error ---
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 15.
+--- Logging error ---
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 16.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 16.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Current request statistics:
+┌───────────────────────────────┬──────────────────────────────────┐
+│ requests_finished             │ 2                                │
+│ requests_failed               │ 97                               │
+│ retry_histogram               │ [28, 0, 0, 66, 2, 0, 0, 0, 0, 3] │
+│ request_avg_failed_duration   │ 1.69s                            │
+│ request_avg_finished_duration │ 739.7ms                          │
+│ requests_finished_per_minute  │ 0                                │
+│ requests_failed_per_minute    │ 19                               │
+│ request_total_duration        │ 2min 44.9s                       │
+│ requests_total                │ 99                               │
+│ crawler_runtime               │ 4min 60.0s                       │
+└───────────────────────────────┴──────────────────────────────────┘
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee._autoscaling.autoscaled_pool] INFO  current_concurrency = 9; desired_concurrency = 17; cpu = 0.0; mem = 0.0; event_loop = 0.0; client_info = 0.0
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Current request statistics:
+┌───────────────────────────────┬──────────────────────────────────┐
+│ requests_finished             │ 2                                │
+│ requests_failed               │ 97                               │
+│ retry_histogram               │ [28, 0, 0, 66, 2, 0, 0, 0, 0, 3] │
+│ request_avg_failed_duration   │ 1.69s                            │
+│ request_avg_finished_duration │ 739.7ms                          │
+│ requests_finished_per_minute  │ 0                                │
+│ requests_failed_per_minute    │ 16                               │
+│ request_total_duration        │ 2min 44.9s                       │
+│ requests_total                │ 99                               │
+│ crawler_runtime               │ 5min 60.0s                       │
+└───────────────────────────────┴──────────────────────────────────┘
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee._autoscaling.autoscaled_pool] INFO  current_concurrency = 9; desired_concurrency = 17; cpu = 0.0; mem = 0.0; event_loop = 0.0; client_info = 0.0
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+[crawlee.crawlers._playwright._playwright_crawler] INFO  Crawled 2/100 pages, 97 failed requests, desired concurrency 17.
+
+
+to vypada ze se scraper zaseknul!

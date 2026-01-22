@@ -63,7 +63,7 @@ def list_filters():
 
     cur.execute("""
         SELECT name, item_count, last_updated
-        FROM bloom_filters
+        FROM scr_bloom_filters
         ORDER BY name
     """)
 

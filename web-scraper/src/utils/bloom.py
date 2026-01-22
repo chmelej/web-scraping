@@ -54,9 +54,18 @@ class BloomFilterManager:
 
         # Save to DB
         with get_cursor(self.conn, dict_cursor=False) as cur:
+            # Update filter
+            cur.execute("""
+                UPDATE scr_bloom_filters
+                SET filter_data = %s,
+                    item_count = item_count + 1,
+                    last_updated = NOW()
+                WHERE name = %s
+            """, (bf.bitarray.tobytes(), filter_name))
+
             # Save item to items table
             cur.execute("""
-                INSERT INTO scr_bloom_filter_items (filter_name, item, source)
+                INSERT INTO scr_bloom_filter_items(filter_name, item, source)
                 VALUES (%s, %s, %s)
                 ON CONFLICT DO NOTHING
             """, (filter_name, item, source))

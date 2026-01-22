@@ -14,8 +14,8 @@ CREATE TABLE scr_scrape_queue (
     UNIQUE(url, uni_listing_id)
 );
 
-CREATE INDEX idx_scr_queue_status ON scr_scrape_queue(status, next_scrape_at);
-CREATE INDEX idx_scr_queue_uni ON scr_scrape_queue(uni_listing_id);
+CREATE INDEX idx_queue_status ON scr_scrape_queue(status, next_scrape_at);
+CREATE INDEX idx_queue_unit ON scr_scrape_queue(unit_listing_id);
 
 CREATE TABLE scr_scrape_results (
     id SERIAL PRIMARY KEY,
@@ -33,8 +33,8 @@ CREATE TABLE scr_scrape_results (
     error_message TEXT
 );
 
-CREATE INDEX idx_scr_results_processing ON scr_scrape_results(processing_status);
-CREATE INDEX idx_scr_results_language ON scr_scrape_results(detected_language);
+CREATE INDEX idx_results_processing ON scr_scrape_results(processing_status);
+CREATE INDEX idx_results_language ON scr_scrape_results(detected_language);
 
 CREATE TABLE scr_parsed_data (
     id SERIAL PRIMARY KEY,
