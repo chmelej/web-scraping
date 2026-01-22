@@ -40,13 +40,13 @@ ORDER BY quality DESC;
 
 CREATE VIEW scr_recent_changes AS
 SELECT
-    unit_listing_id,
+    uni_listing_id,
     field_name,
     COUNT(*) as change_count,
     MAX(detected_at) as last_change
 FROM scr_change_history
 WHERE detected_at > NOW() - INTERVAL '30 days'
-GROUP BY unit_listing_id, field_name
+GROUP BY uni_listing_id, field_name
 ORDER BY last_change DESC
 LIMIT 100;
 

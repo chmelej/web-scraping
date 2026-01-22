@@ -44,7 +44,7 @@ class BloomFilterManager:
             return bf
 
     def add(self, filter_name, item, source='scraped'):
-        """Přidá item do filtru"""
+        """Přidá item do filtru (bez okamžitého update blobu)"""
         bf = self.load_filter(filter_name)
 
         if item in bf:
@@ -70,9 +70,32 @@ class BloomFilterManager:
                 ON CONFLICT DO NOTHING
             """, (filter_name, item, source))
 
+            # Only update count, not the blob (performance optimization)
+            cur.execute("""
+                UPDATE scr_bloom_filters
+                SET item_count = item_count + 1,
+                    last_updated = NOW()
+                WHERE name = %s
+            """, (filter_name,))
+
             self.conn.commit()
 
         return True
+
+    def save_filter_blob(self, filter_name):
+        """Uloží aktuální stav blobu do DB (volat periodicky nebo při ukončení)"""
+        if filter_name not in self.filters:
+            return
+
+        bf = self.filters[filter_name]
+        with get_cursor(self.conn, dict_cursor=False) as cur:
+            cur.execute("""
+                UPDATE scr_bloom_filters
+                SET filter_data = %s,
+                    last_updated = NOW()
+                WHERE name = %s
+            """, (bf.bitarray.tobytes(), filter_name))
+            self.conn.commit()
 
     def check(self, filter_name, item):
         """Zkontroluje zda item existuje v filtru"""
@@ -89,13 +112,12 @@ class BloomFilterManager:
             return cur.fetchone()
 
     def rebuild_from_db(self, filter_name):
-        """Rebuil filtru z bloom_filter_items"""
+        """Rebuil filtru z scr_bloom_filter_items"""
         with get_cursor(self.conn) as cur:
              cur.execute("SELECT item FROM scr_bloom_filter_items WHERE filter_name = %s", (filter_name,))
              items = cur.fetchall()
 
              # Delete old filter
-             # We should probably get capacity from old filter or config, defaulting to len(items)*2
              capacity = max(len(items) * 2, 100000)
 
         with get_cursor(self.conn, dict_cursor=False) as cur:

@@ -10,6 +10,7 @@ import os
 import sys
 import subprocess
 from datetime import datetime, timedelta
+from crawlee import Request
 from crawlee.crawlers import PlaywrightCrawler
 from crawlee import Request
 from crawlee.storage_clients import MemoryStorageClient

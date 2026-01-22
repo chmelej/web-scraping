@@ -1,9 +1,9 @@
--- Initial Schema
+-- Initial Schema with 'scr_' prefix and 'uni_listing_id'
 
 CREATE TABLE scr_scrape_queue (
     id SERIAL PRIMARY KEY,
     url TEXT NOT NULL,
-    unit_listing_id INTEGER,
+    uni_listing_id INTEGER,
     parent_scrape_id INTEGER,
     depth INTEGER DEFAULT 0,
     priority INTEGER DEFAULT 0,
@@ -11,7 +11,7 @@ CREATE TABLE scr_scrape_queue (
     retry_count INTEGER DEFAULT 0,
     next_scrape_at TIMESTAMP DEFAULT NOW(),
     added_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(url, unit_listing_id)
+    UNIQUE(url, uni_listing_id)
 );
 
 CREATE INDEX idx_queue_status ON scr_scrape_queue(status, next_scrape_at);
@@ -39,27 +39,27 @@ CREATE INDEX idx_results_language ON scr_scrape_results(detected_language);
 CREATE TABLE scr_parsed_data (
     id SERIAL PRIMARY KEY,
     scrape_result_id INTEGER REFERENCES scr_scrape_results(id),
-    unit_listing_id INTEGER,
+    uni_listing_id INTEGER,
     content_language VARCHAR(5),
     data JSONB,
     quality_score INTEGER,
     extracted_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_parsed_unit ON scr_parsed_data(unit_listing_id);
-CREATE INDEX idx_parsed_quality ON scr_parsed_data(quality_score);
+CREATE INDEX idx_scr_parsed_uni ON scr_parsed_data(uni_listing_id);
+CREATE INDEX idx_scr_parsed_quality ON scr_parsed_data(quality_score);
 
 CREATE TABLE scr_change_history (
     id SERIAL PRIMARY KEY,
-    unit_listing_id INTEGER NOT NULL,
+    uni_listing_id INTEGER NOT NULL,
     field_name VARCHAR(100),
     old_value TEXT,
     new_value TEXT,
     detected_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_changes_unit ON scr_change_history(unit_listing_id);
-CREATE INDEX idx_changes_date ON scr_change_history(detected_at);
+CREATE INDEX idx_scr_changes_uni ON scr_change_history(uni_listing_id);
+CREATE INDEX idx_scr_changes_date ON scr_change_history(detected_at);
 
 CREATE TABLE scr_domain_blacklist (
     domain TEXT PRIMARY KEY,
