@@ -1,0 +1,15 @@
+psycopg2-binary
+playwright
+beautifulsoup4
+lxml
+langdetect
+spacy==3.7.0
+click
+pyyaml
+python-dotenv
+phonenumbers
+pybloom-live
+pytest
+pytest-cov
+black
+ruff

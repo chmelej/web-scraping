@@ -1,0 +1,10 @@
+Model Usage                 Reqs   Input Tokens   Cache Reads  Output Tokens   │
+│  ────────────────────────────────────────────────────────────────────────────│
+│  gemini-2.5-flash-lite         14        114,448             0          1,638│
+│  gemini-3-pro-preview          36        355,052     1,169,610         18,833│
+│  gemini-2.5-flash               1              0             0              0│
+│  gemini-3-flash-preview         2         95,444        94,449          1,053|
+
+muzes tuto tabulku teoreticky prepocitat na fifncni naklady? 
+pouzij dnesni standardni ceny v $. 
+vytvor skript ktery najde data spocita a secte.

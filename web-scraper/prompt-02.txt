@@ -1,0 +1,10 @@
+z aktualni tabulky je videt ze stranky zustavaji ve stavu `processing` proc? ocekavam ze stav `processing` je docasny par minut nez playwright stahne stranku. pokud stazeni neprobehne v poradku a neziskame data, mela by se stav prepnou do stavu `failed`, `blocked`, ... neco a ne zustat viset v procesing
+
+-----------------------
+| status     | cnt    |
+| ---------- | ------ |
+| completed  | 1694   |
+| pending    | 164588 |
+| processing | 105900 |
+-----------------------
+

@@ -1,0 +1,58 @@
+priklad:
+url = http://www.pourlasolidarite.be
+
+error log:
+```
+[scraper] INFO  Processing http://kineas.be ({"message": "Processing http://kineas.be", "asctime": "2026-01-21 09:28:49,654"})
+[crawlee.crawlers._playwright._playwright_crawler] WARN  Retrying request to http://www.pourlasolidarite.be due to: Page.goto: net::ERR_NAME_NOT_RESOLVED at http://www.pourlasolidarite.be
+/.
+[crawlee.crawlers._playwright._playwright_crawler] WARN  Retrying request to http://www.pourlasolidarite.be due to: Page.goto: net::ERR_NAME_NOT_RESOLVED at http://www.pourlasolidarite.be
+/.
+[crawlee.crawlers._playwright._playwright_crawler] ERROR Request to http://www.pourlasolidarite.be failed and reached maximum retries
+ Traceback (most recent call last):
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/crawlee/crawlers/_basic/_context_pipeline.py", line 100, in __call__
+    result = await middleware_instance.action()
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/crawlee/crawlers/_basic/_context_pipeline.py", line 40, in action
+    self.output_context = await self.generator.__anext__()
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/crawlee/crawlers/_playwright/_playwright_crawler.py", line 325, in _navigate
+    response = await context.page.goto(
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+        context.request.url, timeout=remaining_timeout.total_seconds() * 1000, **context.goto_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/playwright/async_api/_generated.py", line 9041, in goto
+    await self._impl_obj.goto(
+        url=url, timeout=timeout, waitUntil=wait_until, referer=referer
+    )
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/playwright/_impl/_page.py", line 552, in goto
+    return await self._main_frame.goto(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/playwright/_impl/_frame.py", line 153, in goto
+    await self._channel.send(
+        "goto", self._navigation_timeout, locals_to_params(locals())
+    )
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py", line 69, in send                                                                 return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/home/chmelensky/web-scraper/002/.venv/lib/python3.14/site-packages/playwright/_impl/_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.goto: net::ERR_NAME_NOT_RESOLVED at http://www.pourlasolidarite.be/
+Call log:
+  - navigating to "http://www.pourlasolidarite.be/", waiting until "load"
+2026-01-21 09:28:50,136 - scraper - INFO - Processing https://delitraiteur.com
+```
+
+SELECT * FROM scr_scrape_queue where queue_id = 224526 ;
+vraci status='failed' to je v poradku 
+
+
+SELECT * FROM scr_scrape_results where queue_id = 224526 ;
+- nic
+ale z logu vime ze "ERR_NAME_NOT_RESOLVED" to bych ocekaval ze bude ulozeno v scr_scrape_results 
+
+

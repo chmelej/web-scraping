@@ -65,7 +65,7 @@ class BloomFilterManager:
 
             # Save item to items table
             cur.execute("""
-                INSERT INTO scr_bloom_filter_items (filter_name, item, source)
+                INSERT INTO scr_bloom_filter_items(filter_name, item, source)
                 VALUES (%s, %s, %s)
                 ON CONFLICT DO NOTHING
             """, (filter_name, item, source))
