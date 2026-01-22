@@ -1,0 +1,18 @@
+Pri kontrole dat jsem nasel velke nesrovnalosti
+priklad stranka ulozena jako `SELECT * FROM scr_scrape_results where id = 4`
+
+obsahuje:
+```
+company_name: Vanneste Projects
+phone: 0478 40 68 35
+email: info@vannesteprojects.be
+address: Ganzendries 29,1820 Steenokkerzeel
+org_num: BE0833.310.766
+links to: Facebook, Twitter, Google Business, Instagram, Linkedin, Youtube
+```
+
+ale parser vetsinu udaju nevidi
+
+zdrojove html je ulozeno v scraper_result_id_4.html
+
+projdi parsovani a hledani kazde informace a vylepsi implmentaci. 

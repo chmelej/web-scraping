@@ -7,9 +7,13 @@ import shutil
 import glob
 import tempfile
 import os
+import sys
+import subprocess
 from datetime import datetime, timedelta
 from crawlee.crawlers import PlaywrightCrawler
 from crawlee import Request
+from crawlee.storage_clients import MemoryStorageClient
+from crawlee.configuration import Configuration
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.language import detect_language
 from src.utils.urls import extract_domain
@@ -22,11 +26,20 @@ class Scraper:
         self.conn = get_db_connection()
         self.logger = setup_logging('scraper', f'{LOG_DIR}/scraper.log')
         # Suppress verbose Crawlee errors (stack traces for 404s/DNS)
-        logging.getLogger('crawlee.crawlers._playwright._playwright_crawler').setLevel(logging.CRITICAL)
+        # logging.getLogger('crawlee.crawlers._playwright._playwright_crawler').setLevel(logging.CRITICAL)
 
     def cleanup_temp_dirs(self):
-        """Clean up temporary directories created by Playwright/Crawlee"""
+        """Clean up temporary directories created by Playwright/Crawlee and kill zombies"""
         try:
+            # 1. Kill zombie chromium processes (Linux only)
+            if sys.platform.startswith('linux'):
+                try:
+                    subprocess.run(["pkill", "-f", "chromium"], capture_output=True)
+                    subprocess.run(["pkill", "-f", "chrome"], capture_output=True)
+                except Exception:
+                    pass
+
+            # 2. Clean temp dirs
             tmp_dir = tempfile.gettempdir()
             # Pattern observed by user
             pattern = os.path.join(tmp_dir, "apify-playwright-*") 
@@ -39,12 +52,28 @@ class Scraper:
                         count += 1
                     except Exception:
                         pass
+
             if count > 0:
                 self.logger.debug(f"Cleaned up {count} temporary Playwright directories")
         except Exception as e:
             self.logger.warning(f"Failed to clean up temp dirs: {e}")
 
-    def fetch_batch(self, batch_size=10):
+    def reset_crawlee_global_state(self):
+        """Reset Crawlee global state to prevent ServiceConflictError and cache accumulation"""
+        self.logger.debug("Resetting Crawlee global state")
+        try:
+            from crawlee import service_locator
+            # Reset the service locator's internal state
+            service_locator._configuration = None
+            service_locator._event_manager = None
+            service_locator._storage_client = None
+            # Clear the storage instance manager cache
+            if hasattr(service_locator, 'storage_instance_manager'):
+                 service_locator.storage_instance_manager.clear_cache()
+        except Exception as e:
+            self.logger.warning(f"Failed to reset Crawlee global state: {e}")
+
+    def fetch_batch(self, batch_size=20):
         """Fetch batch of URLs from DB"""
         self.conn.rollback() # Ensure fresh transaction
         self.logger.debug(f"Fetching batch of {batch_size} URLs...")
@@ -153,6 +182,33 @@ class Scraper:
          finally:
              conn.close()
 
+    def reconcile_batch_sync(self, batch_ids):
+        """Ensure no items are left in processing state after batch"""
+        if not batch_ids:
+            return
+            
+        self.logger.debug(f"Reconciling batch of {len(batch_ids)} items...")
+        conn = get_db_connection()
+        try:
+            with get_cursor(conn, dict_cursor=False) as cur:
+                # Placeholders for IN clause
+                placeholders = ','.join(['%s'] * len(batch_ids))
+                query = f"""
+                    UPDATE scr_scrape_queue
+                    SET status = 'failed'
+                    WHERE queue_id IN ({placeholders})
+                      AND status = 'processing'
+                """
+                cur.execute(query, tuple(batch_ids))
+                count = cur.rowcount
+                conn.commit()
+                if count > 0:
+                    self.logger.warning(f"Reconciled {count} stuck items in batch (set to failed)")
+        except Exception as e:
+            self.logger.error(f"Error reconciling batch: {e}")
+        finally:
+            conn.close()
+
     async def request_handler(self, context):
         request = context.request
         page = context.page
@@ -175,13 +231,37 @@ class Scraper:
         }
 
         try:
-            # Wait for content
+            # Enforce a hard timeout on the page content retrieval
+            # This protects against Playwright hanging internally
             self.logger.debug(f"Waiting for content from {request.url}")
-            content = await page.content()
+            
+            # Retry logic for "Execution context was destroyed" (client-side redirects)
+            for attempt in range(3):
+                try:
+                    content = await page.content()
+                    break # Success
+                except Exception as e:
+                    if "Execution context was destroyed" in str(e) and attempt < 2:
+                        self.logger.warning(f"Execution context destroyed for {request.url}, retrying ({attempt+1}/3)...")
+                        await asyncio.sleep(1) # Wait for navigation/redirect to settle
+                        continue
+                    raise e # Re-raise if not handled or max retries reached
+            
             result['html'] = content
             
+            # Check for redirect (client-side or server-side)
+            # If the page URL is different from the request URL, we should treat it as a redirect
+            # and potentially enqueue the new URL if it wasn't a standard 3xx redirect handled by Playwright
+            final_url = page.url
+            if final_url != request.url:
+                 self.logger.info(f"Redirect detected: {request.url} -> {final_url}")
+                 result['redirected_from'] = request.url
+                 # We still save the content under the ORIGINAL queue_id, effectively treating it as
+                 # "we asked for X, we got content for Y". This is usually fine.
+                 # However, if we want to explicitly track Y as a new item, we'd need to add it to the queue.
+                 # For now, just logging it and saving the content is sufficient for most cases.
+            
             # Extract more info from the page/response
-            # In PlaywrightCrawler, context.response is available
             if hasattr(context, 'response') and context.response:
                 result['status_code'] = context.response.status
                 result['headers'] = context.response.headers
@@ -207,9 +287,10 @@ class Scraper:
                 self.logger.debug(f"Checking for subpages on {request.url}")
                 lang, _ = detect_language(content)
                 await loop.run_in_executor(None, self.add_subpages_sync, result_id, request.url, content, lang, uni_listing_id, depth)
+            
+            self.logger.info(f"Finished processing {request.url}")
 
         except Exception as e:
-            # Log as warning without stack trace for expected scraping errors
             self.logger.warning(f"Error scraping {request.url}: {e}")
             result['error'] = str(e)
 
@@ -221,6 +302,8 @@ class Scraper:
             else:
                  next_try = datetime.now() + timedelta(hours=1)
                  await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'pending', retry_count + 1, next_try)
+            
+            self.logger.info(f"Finished processing (failed) {request.url}")
 
     async def failed_request_handler(self, context, error):
         """Handle failed requests"""
@@ -284,11 +367,8 @@ class Scraper:
                 max_requests_per_crawl=1,
                 headless=PLAYWRIGHT_HEADLESS,
                 request_handler_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
+                navigation_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
                 browser_launch_options={"args": ["--no-sandbox"]},
-                goto_options={
-                    "waitUntil": "domcontentloaded",
-                    "timeout": 15000
-                },
             )
             crawler.failed_request_handler = self.failed_request_handler
             self.logger.debug("Running crawler")
@@ -318,15 +398,23 @@ class Scraper:
         self.logger.info("Starting Crawlee Scraper...")
 
         while True:
-            # Fetch batch
-            # Increased batch size to 100 to reduce browser restart overhead and temp file accumulation
-            batch = self.fetch_batch(100)
+            # 1. Reset global state at the start of each iteration to prevent accumulation and ServiceConflictError
+            self.reset_crawlee_global_state()
+
+            # 2. Fetch batch
+            # Used small batch size (20) to ensure regular browser restarts and avoid memory leaks/hangs
+            batch = self.fetch_batch(20)
             if not batch:
                 self.logger.info("Queue empty, waiting...")
                 await asyncio.sleep(60)
                 continue
 
             self.logger.info(f"Fetched {len(batch)} URLs")
+
+            # Force total isolation for this batch by using a fresh configuration and unique storage directory
+            batch_storage_dir = tempfile.mkdtemp(prefix="crawlee_batch_storage_")
+            batch_config = Configuration()
+            batch_config.storage_dir = batch_storage_dir
 
             request_list = []
             for item in batch:
@@ -345,27 +433,42 @@ class Scraper:
                     )
                 )
 
-            # Configure Crawler with masking features
-            # Create a new instance for each batch to avoid reuse issues
+            # Configure Crawler with isolation
             crawler = PlaywrightCrawler(
+                configuration=batch_config,
                 request_handler=self.request_handler,
-                max_requests_per_crawl=100,
+                storage_client=MemoryStorageClient(),
+                max_requests_per_crawl=25,
                 headless=PLAYWRIGHT_HEADLESS,
-                browser_type='chromium', # Explicitly use chromium
+                browser_type='chromium',
                 request_handler_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
-                browser_launch_options={"args": ["--no-sandbox"]},
-                goto_options={
-                    "waitUntil": "domcontentloaded",
-                    "timeout": 15000
+                navigation_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
+                browser_launch_options={
+                    "args": ["--no-sandbox", "--disable-dev-shm-usage"],
+                    "handle_sigint": False,
                 },
             )
             crawler.failed_request_handler = self.failed_request_handler
 
             # Run crawler on this batch
-            await crawler.run(request_list)
-            
-            # Clean up temp files after batch
-            self.cleanup_temp_dirs()
+            try:
+                self.logger.info(f"Starting batch execution (isolation dir: {batch_storage_dir})...")
+                await crawler.run(request_list)
+            except Exception as e:
+                self.logger.error(f"Batch execution failed with error: {e}")
+            finally:
+                # 3. Aggressive cleanup after EVERY batch
+                self.cleanup_temp_dirs()
+                try:
+                    if os.path.exists(batch_storage_dir):
+                        shutil.rmtree(batch_storage_dir, ignore_errors=True)
+                except Exception:
+                    pass
+
+                # Reconcile batch status (fix stuck items)
+                batch_ids = [item['queue_id'] for item in batch]
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, self.reconcile_batch_sync, batch_ids)
 
 if __name__ == '__main__':
     scraper = Scraper()
