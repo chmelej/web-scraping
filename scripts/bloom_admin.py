@@ -1,8 +1,10 @@
+import click
 import sys
 import os
+
+# Add src to path
 sys.path.append(os.getcwd())
 
-import click
 from src.utils.bloom import BloomFilterManager
 from src.utils.db import get_db_connection
 
@@ -56,20 +58,17 @@ def stats(name):
 @cli.command()
 def list_filters():
     """Seznam všech filtrů"""
-    try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+    conn = get_db_connection()
+    cur = conn.cursor()
 
-        cur.execute("""
-            SELECT name, item_count, last_updated
-            FROM bloom_filters
-            ORDER BY name
-        """)
+    cur.execute("""
+        SELECT name, item_count, last_updated
+        FROM scr_bloom_filters
+        ORDER BY name
+    """)
 
-        for row in cur.fetchall():
-            click.echo(f"{row[0]:<20} {row[1]:>10,} items  (updated: {row[2]})")
-    except Exception as e:
-        click.echo(f"Error: {e}")
+    for row in cur.fetchall():
+        click.echo(f"{row[0]:<20} {row[1]:>10,} items  (updated: {row[2]})")
 
 if __name__ == '__main__':
     cli()

@@ -6,12 +6,8 @@ def detect_language(html):
     Detekuje jazyk z HTML
     Returns: (language_code, confidence)
     """
-    try:
-        soup = BeautifulSoup(html, 'lxml')
-    except Exception:
-        return 'unknown', 0.0
-
     # Zkus HTML lang attribute
+    soup = BeautifulSoup(html, 'lxml')
     html_tag = soup.find('html')
     if html_tag and html_tag.get('lang'):
         lang = html_tag.get('lang')[:2].lower()
@@ -22,10 +18,10 @@ def detect_language(html):
     text = ' '.join(text.split())[:10000]
 
     if len(text) < 50:
-        return 'unknown', 0.0
+        return None, 0.0
 
     try:
         results = detect_langs(text)
         return results[0].lang, results[0].prob
     except:
-        return 'unknown', 0.0
+        return None, 0.0

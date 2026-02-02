@@ -1,0 +1,6 @@
+│  Model Usage                 Reqs   Input Tokens   Cache Reads  Output Tokens                                                                                                                                                        │
+│  ────────────────────────────────────────────────────────────────────────────                                                                                                                                                        │
+│  gemini-2.5-flash-lite         25        101,756             0          2,299                                                                                                                                                        │
+│  gemini-3-pro-preview          75      1,063,441     3,603,705         32,451                                                                                                                                                        │
+│  gemini-2.5-flash              11         39,068         3,781          5,713                                                                                                                                                        │
+│  gemini-3-flash-preview        39        985,496     1,802,348         10,043                        

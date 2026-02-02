@@ -2,48 +2,39 @@ import json
 import time
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.logging_config import setup_logging
+from config.settings import LOG_DIR, WEBHOOK_URL
+import os
+import requests
+from datetime import datetime
 
 class ChangeDetector:
     def __init__(self):
-        self.logger = setup_logging('change_detector', 'change_detector.log')
-        try:
-            self.conn = get_db_connection()
-        except:
-            self.conn = None
-            self.logger.error("ChangeDetector failed to connect to DB")
+        self.conn = get_db_connection()
+        self.logger = setup_logging('change_detector', f'{LOG_DIR}/change_detector.log')
 
-    def get_previous_data(self, unit_listing_id, current_extracted_at):
-        """Získá předchozí parsovaná data pro listing"""
-        if not self.conn:
-            return None
-
+    def get_latest_data(self, uni_listing_id):
+        """Získá 2 nejnovější parsovaná data pro listing"""
         with get_cursor(self.conn) as cur:
             cur.execute("""
-                SELECT data
-                FROM parsed_data
-                WHERE unit_listing_id = %s
-                  AND extracted_at < %s
+                SELECT parsed_id, data, extracted_at
+                FROM scr_parsed_data
+                WHERE uni_listing_id = %s
                 ORDER BY extracted_at DESC
-                LIMIT 1
-            """, (unit_listing_id, current_extracted_at))
-
-            row = cur.fetchone()
-            return row['data'] if row else None
+                LIMIT 2
+            """)
+            return cur.fetchall()
 
     def detect_changes(self, old_data, new_data):
         """
         Porovná 2 JSON objekty a vrátí změny
         Returns: list of (field_name, old_value, new_value)
         """
-        if not old_data:
-            return [] # First scrape, no changes
-
         changes = []
 
         # Fields to track
         tracked_fields = [
-            'company_name', 'emails', 'phones', 'ico',
-            'address', 'opening_hours', 'social_media'
+            'company_name', 'emails', 'phones', 'org_num',
+            'addresses', 'opening_hours', 'social_media'
         ]
 
         for field in tracked_fields:
@@ -52,9 +43,9 @@ class ChangeDetector:
 
             # Normalize lists for comparison
             if isinstance(old_val, list):
-                old_val = sorted(old_val)
+                old_val = sorted([str(x) for x in old_val])
             if isinstance(new_val, list):
-                new_val = sorted(new_val)
+                new_val = sorted([str(x) for x in new_val])
 
             if old_val != new_val:
                 changes.append((
@@ -65,92 +56,104 @@ class ChangeDetector:
 
         return changes
 
-    def save_changes(self, unit_listing_id, changes):
+    def save_changes(self, uni_listing_id, changes):
         """Uloží změny do change_history"""
-        if not changes or not self.conn:
+        if not changes:
             return
 
+        with get_cursor(self.conn, dict_cursor=False) as cur:
+            for field, old_val, new_val in changes:
+                cur.execute("""
+                    INSERT INTO scr_change_history
+                    (uni_listing_id, field_name, old_value, new_value)
+                    VALUES (%s, %s, %s, %s)
+                """, (uni_listing_id, field, old_val, new_val))
+
+            self.conn.commit()
+
+    def notify_change(self, uni_listing_id, changes):
+        """Pošli webhook notification při změně"""
+        if not WEBHOOK_URL:
+            return
+
+        payload = {
+            'uni_listing_id': uni_listing_id,
+            'changes': [
+                {
+                    'field': field,
+                    'old_value': old_val,
+                    'new_value': new_val
+                }
+                for field, old_val, new_val in changes
+            ],
+            'timestamp': datetime.now().isoformat()
+        }
+
         try:
-            with get_cursor(self.conn, dict_cursor=False) as cur:
-                for field, old_val, new_val in changes:
-                    cur.execute("""
-                        INSERT INTO change_history
-                        (unit_listing_id, field_name, old_value, new_value)
-                        VALUES (%s, %s, %s, %s)
-                    """, (unit_listing_id, field, old_val, new_val))
-                # Commit handled by caller
+            requests.post(WEBHOOK_URL, json=payload, timeout=10)
         except Exception as e:
-            self.logger.error(f"Error saving changes: {e}")
-            raise e
+            self.logger.error(f"Webhook failed: {e}")
 
     def process_one(self):
-        """Zpracuje jeden unchecked parsed_data row"""
-        if not self.conn:
+        """Zpracuje jeden listing"""
+        # Get listings s více než 1 parsovaným výsledkem
+        with get_cursor(self.conn) as cur:
+            cur.execute("""
+                SELECT uni_listing_id, COUNT(*) as cnt
+                FROM scr_parsed_data
+                WHERE uni_listing_id IS NOT NULL
+                GROUP BY uni_listing_id
+                HAVING COUNT(*) >= 2
+                ORDER BY MAX(extracted_at) DESC
+                LIMIT 1
+            """)
+
+            row = cur.fetchone()
+            if not row:
+                return False
+
+            uni_listing_id = row['uni_listing_id']
+
+        # Get latest 2 data
+        results = self.get_latest_data(uni_listing_id)
+        if len(results) < 2:
             return False
 
-        try:
-            with get_cursor(self.conn, dict_cursor=True) as cur: # Keep dict cursor for fetching
-                # 1. Select one unchecked row
-                cur.execute("""
-                    SELECT id, unit_listing_id, data, extracted_at
-                    FROM parsed_data
-                    WHERE change_checked = FALSE
-                      AND unit_listing_id IS NOT NULL
-                    ORDER BY extracted_at ASC
-                    LIMIT 1
-                    FOR UPDATE SKIP LOCKED
-                """)
+        new_data = results[0]['data']
+        old_data = results[1]['data']
+        new_parsed_id = results[0]['parsed_id']
 
-                target = cur.fetchone()
-                if not target:
-                    return False
+        self.logger.info(f"Checking changes for listing {uni_listing_id}")
 
-                row_id = target['id']
-                unit_listing_id = target['unit_listing_id']
-                new_data = target['data']
-                extracted_at = target['extracted_at']
+        # Detect changes
+        changes = self.detect_changes(old_data, new_data)
 
-                self.logger.info(f"Checking changes for listing {unit_listing_id} (row {row_id})")
-
-                # 2. Get previous data
-                old_data = self.get_previous_data(unit_listing_id, extracted_at)
-
-                # 3. Detect changes
-                changes = self.detect_changes(old_data, new_data)
-
-                if changes:
-                    self.logger.info(f"  -> Found {len(changes)} changes")
-                    self.save_changes(unit_listing_id, changes)
-
-                # 4. Mark as checked
-                cur.execute("""
-                    UPDATE parsed_data
-                    SET change_checked = TRUE
-                    WHERE id = %s
-                """, (row_id,))
-
+        if changes:
+            self.logger.info(f"  -> Found {len(changes)} changes")
+            self.save_changes(uni_listing_id, changes)
+            self.notify_change(uni_listing_id, changes)
+        else:
+            self.logger.info(f"  -> No changes detected, deleting duplicate version (parsed_id: {new_parsed_id})")
+            with get_cursor(self.conn, dict_cursor=False) as cur:
+                cur.execute("DELETE FROM scr_parsed_data WHERE parsed_id = %s", (new_parsed_id,))
                 self.conn.commit()
-                return True
 
-        except Exception as e:
-            self.logger.error(f"Error in process_one: {e}")
-            if self.conn:
-                self.conn.rollback()
-            return False
+        return True
 
     def run(self):
         """Main loop"""
-        self.logger.info("ChangeDetector started")
+        self.logger.info("Change detector started")
 
         while True:
-            if not self.process_one():
-                self.logger.info("No changes to detect, waiting...")
-                time.sleep(300) # 5 minut
-                continue
+            try:
+                if not self.process_one():
+                    self.logger.info("No changes to detect, waiting...")
+                    time.sleep(300) # 5 minut
+                    continue
+            except Exception as e:
+                self.logger.error(f"Error in change detector: {e}")
+                time.sleep(60)
 
 if __name__ == '__main__':
-    try:
-        detector = ChangeDetector()
-        detector.run()
-    except KeyboardInterrupt:
-        print("Stopping detector...")
+    detector = ChangeDetector()
+    detector.run()

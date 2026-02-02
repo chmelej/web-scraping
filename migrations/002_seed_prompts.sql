@@ -1,4 +1,7 @@
-INSERT INTO llm_prompts (use_case, language, prompt_template, system_prompt, model, notes) VALUES
+-- Seed Prompts
+
+INSERT INTO scr_llm_prompts (use_case, language, prompt_template, system_prompt, model, notes) VALUES
+
 ('opening_hours', 'cs',
 'Převeď následující text otevírací doby do JSON formátu.
 Výstup musí být POUZE validní JSON, bez jakéhokoliv jiného textu.
@@ -34,5 +37,4 @@ Format: {"days": [{"day": "monday", "open": "09:00", "close": "17:00"}]}
 Text: {text}',
 'You are a parser. JSON only.',
 'llama3.2:3b',
-'Local model fallback')
-ON CONFLICT DO NOTHING;
+'Local model fallback');
