@@ -17,3 +17,4 @@ venv/
 *.pyc
 *.py[cod]
 /uv.lock
+/docs/crawlee-python.repomix.xml

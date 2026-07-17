@@ -1,0 +1,4 @@
+. /opt/bin/nodejsEnv.sh
+repomix -o crawlee-python.repomix.xml crawlee-python
+
+

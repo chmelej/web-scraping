@@ -1,0 +1,28 @@
+{
+  "output": {
+    "compress": true,
+    "removeComments": false
+  },
+  "ignore": {
+    "useGitignore": true,
+    "useDefaultPatterns": true,
+    "customPatterns": [
+      "**/.git/**",
+      "**/.gradle/**",
+      "**/.idea/**",
+      "**/build/**",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/package-lock.json",
+      "**/*.png",
+      "**/*.class",
+      "**/pnpm-lock.yaml",
+      "**/*.svg",
+      "**/target/**",
+      "tokens*.txt",
+      "old/*",
+      "website"
+    ]
+  }
+}
+
