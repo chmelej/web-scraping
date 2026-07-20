@@ -2,4 +2,4 @@
 # chybach, takze tento skript je projde a prida do databaze. je to naivni
 # prepisuje se posledni hodnota.
 
-find logs -type f -name 'xscraper*log' -exec uv run scripts/update_errors_from_log.py {} \;
+find logs -maxdepth 1 -type f -name 'xscraper*log' -exec uv run scripts/update_errors_from_log.py {} \;
