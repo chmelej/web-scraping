@@ -124,7 +124,7 @@ class Scraper:
                 # 1. Mark original item as 'redirected'
                 cur.execute("""
                     UPDATE scr_scrape_queue
-                    SET status = 'redirected', completed_at = NOW()
+                    SET status = 'redirected'
                     WHERE queue_id = %s
                 """, (queue_id,))
 
