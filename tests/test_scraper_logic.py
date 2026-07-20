@@ -38,5 +38,33 @@ class TestScraperLogic(unittest.TestCase):
         # But we check if it is selected
         self.assertIn("uni_listing_id", sql)
 
+    @patch('workers.scraper.get_db_connection')
+    @patch('workers.scraper.setup_logging')
+    def test_handle_redirect_sync(self, mock_log, mock_get_db):
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_cur.__enter__.return_value = mock_cur
+        mock_get_db.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cur
+
+        mock_cur.fetchone.return_value = [99] # new queue_id
+
+        scraper = Scraper()
+        new_id = scraper.handle_redirect_sync(
+            queue_id=10,
+            original_url='http://old.com',
+            final_url='https://new.com',
+            uni_listing_id=123,
+            opco='BE',
+            depth=0
+        )
+
+        self.assertEqual(new_id, 99)
+        self.assertTrue(mock_cur.execute.called)
+        
+        # Verify status set to 'redirected' for original queue_id
+        update_call_sql = mock_cur.execute.call_args_list[0][0][0]
+        self.assertIn("status = 'redirected'", update_call_sql)
+
 if __name__ == '__main__':
     unittest.main()

@@ -97,15 +97,10 @@ class Scraper:
             return rows
 
     def update_queue_status_sync(self, queue_id, status, retry_count=None, next_scrape_at=None):
-        """Sync update queue status"""
-        self.logger.debug(f"Updating queue {queue_id} status to {status}")
         conn = get_db_connection()
         try:
             with get_cursor(conn, dict_cursor=False) as cur:
-                updates = ["status = %s"]
-                params = [status]
-                
-                if retry_count is not None:
+                if retry_count is not None and next_scrape_at is not None:
                     cur.execute("""
                         UPDATE scr_scrape_queue
                         SET status = %s, retry_count = %s, next_scrape_at = %s
@@ -113,9 +108,62 @@ class Scraper:
                     """, (status, retry_count, next_scrape_at, queue_id))
                 else:
                     cur.execute("""
-                        UPDATE scr_scrape_queue SET status = %s WHERE queue_id = %s
+                        UPDATE scr_scrape_queue
+                        SET status = %s
+                        WHERE queue_id = %s
                     """, (status, queue_id))
                 conn.commit()
+        finally:
+            conn.close()
+
+    def handle_redirect_sync(self, queue_id, original_url, final_url, uni_listing_id, opco, depth, priority=0):
+        """Mark original URL as 'redirected' and insert final_url as a new queue item"""
+        conn = get_db_connection()
+        try:
+            with get_cursor(conn, dict_cursor=False) as cur:
+                # 1. Mark original item as 'redirected'
+                cur.execute("""
+                    UPDATE scr_scrape_queue
+                    SET status = 'redirected', completed_at = NOW()
+                    WHERE queue_id = %s
+                """, (queue_id,))
+
+                # 2. Insert final_url into queue as new item (or return existing if present)
+                cur.execute("""
+                    INSERT INTO scr_scrape_queue
+                    (url, uni_listing_id, opco, depth, priority, status)
+                    VALUES (%s, %s, %s, %s, %s, 'pending')
+                    ON CONFLICT (url) DO UPDATE
+                    SET uni_listing_id = COALESCE(scr_scrape_queue.uni_listing_id, EXCLUDED.uni_listing_id),
+                        opco = COALESCE(scr_scrape_queue.opco, EXCLUDED.opco)
+                    RETURNING queue_id
+                """, (final_url, uni_listing_id, opco, depth, priority))
+                new_queue_id = cur.fetchone()[0]
+                conn.commit()
+                self.logger.info(f"Redirect handled: {original_url} (queue_id {queue_id} -> redirected) -> {final_url} (queue_id {new_queue_id})")
+                return new_queue_id
+        except Exception as e:
+            self.logger.error(f"Error handling redirect {original_url} -> {final_url}: {e}")
+            conn.rollback()
+            return queue_id
+        finally:
+            conn.close()
+
+    def add_domain_to_blacklist_sync(self, domain, reason="no_dns"):
+        conn = get_db_connection()
+        try:
+            with get_cursor(conn, dict_cursor=False) as cur:
+                cur.execute("""
+                    INSERT INTO scr_domain_blacklist (domain, reason, fail_count, first_failed_at, last_failed_at, auto_added)
+                    VALUES (%s, %s, 1, NOW(), NOW(), TRUE)
+                    ON CONFLICT (domain) DO UPDATE
+                    SET fail_count = scr_domain_blacklist.fail_count + 1,
+                        last_failed_at = NOW()
+                """, (domain, reason))
+                conn.commit()
+                self.logger.info(f"Blacklisted domain {domain} (reason: {reason})")
+        except Exception as e:
+            self.logger.warning(f"Failed to blacklist domain {domain}: {e}")
         finally:
             conn.close()
 
@@ -246,16 +294,19 @@ class Scraper:
             result['html'] = content
             
             # Check for redirect (client-side or server-side)
-            # If the page URL is different from the request URL, we should treat it as a redirect
-            # and potentially enqueue the new URL if it wasn't a standard 3xx redirect handled by Playwright
             final_url = page.url
-            if final_url != request.url:
+            target_url = request.url
+            target_queue_id = queue_id
+            if final_url and final_url != request.url:
                  self.logger.info(f"Redirect detected: {request.url} -> {final_url}")
                  result['redirected_from'] = request.url
-                 # We still save the content under the ORIGINAL queue_id, effectively treating it as
-                 # "we asked for X, we got content for Y". This is usually fine.
-                 # However, if we want to explicitly track Y as a new item, we'd need to add it to the queue.
-                 # For now, just logging it and saving the content is sufficient for most cases.
+                 target_url = final_url
+                 opco = request.user_data.get('opco')
+                 priority = request.user_data.get('priority', 0)
+                 loop = asyncio.get_running_loop()
+                 target_queue_id = await loop.run_in_executor(
+                     None, self.handle_redirect_sync, queue_id, request.url, final_url, uni_listing_id, opco, depth, priority
+                 )
             
             # Extract more info from the page/response
             if hasattr(context, 'response') and context.response:
@@ -268,32 +319,45 @@ class Scraper:
             if not result['status_code']:
                 result['status_code'] = 200
 
-            self.logger.debug(f"Got content for {request.url}, saving result...")
+            self.logger.debug(f"Got content for {target_url}, saving result...")
 
-            # Save result (run in executor to not block loop)
+            # Save result with final target_url and target_queue_id
             loop = asyncio.get_running_loop()
-            result_id = await loop.run_in_executor(None, self.save_result_sync, queue_id, request.url, result)
+            result_id = await loop.run_in_executor(None, self.save_result_sync, target_queue_id, target_url, result)
 
-            # Update status
+            # Update status for target_queue_id
             next_scrape = datetime.now() + timedelta(days=REQUEUE_INTERVAL_DAYS)
-            await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'completed', None, next_scrape)
+            await loop.run_in_executor(None, self.update_queue_status_sync, target_queue_id, 'completed', None, next_scrape)
 
             # Subpages
             if uni_listing_id:
-                self.logger.debug(f"Checking for subpages on {request.url}")
+                self.logger.debug(f"Checking for subpages on {target_url}")
                 lang, _ = detect_language(content)
-                await loop.run_in_executor(None, self.add_subpages_sync, result_id, request.url, content, lang, uni_listing_id, depth)
+                await loop.run_in_executor(None, self.add_subpages_sync, result_id, target_url, content, lang, uni_listing_id, depth)
             
-            self.logger.info(f"Finished processing {request.url}")
+            self.logger.info(f"Finished processing {target_url}")
 
         except Exception as e:
-            self.logger.warning(f"Error scraping {request.url}: {e}")
-            result['error'] = str(e)
+            err_str = str(e)
+            self.logger.warning(f"Error scraping {request.url}: {err_str}")
+            result['error'] = err_str
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self.save_result_sync, queue_id, request.url, result)
 
-            if retry_count >= MAX_RETRIES:
+            is_hard_failure = ("ERR_NAME_NOT_RESOLVED" in err_str or 
+                               "could not translate host name" in err_str or 
+                               "status code: 404" in err_str or 
+                               "status code: 410" in err_str)
+
+            if is_hard_failure:
+                if "ERR_NAME_NOT_RESOLVED" in err_str or "could not translate host name" in err_str:
+                    from urllib.parse import urlparse
+                    domain = urlparse(request.url).netloc
+                    if domain:
+                        await loop.run_in_executor(None, self.add_domain_to_blacklist_sync, domain, "no_dns")
+                await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'failed')
+            elif retry_count >= MAX_RETRIES:
                  await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'failed')
             else:
                  next_try = datetime.now() + timedelta(hours=1)
@@ -307,9 +371,10 @@ class Scraper:
         
         queue_id = request.user_data['queue_id']
         retry_count = request.user_data['retry_count']
+        err_str = str(error)
         
         # Simple one-line warning
-        self.logger.warning(f"Page unavailable: {request.url} ({error})")
+        self.logger.warning(f"Page unavailable: {request.url} ({err_str})")
         
         result = {
             'html': None,
@@ -317,13 +382,25 @@ class Scraper:
             'headers': {},
             'ip_address': None,
             'redirected_from': None,
-            'error': str(error)
+            'error': err_str
         }
 
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, self.save_result_sync, queue_id, request.url, result)
 
-        if retry_count >= MAX_RETRIES:
+        is_hard_failure = ("ERR_NAME_NOT_RESOLVED" in err_str or 
+                           "could not translate host name" in err_str or 
+                           "status code: 404" in err_str or 
+                           "status code: 410" in err_str)
+
+        if is_hard_failure:
+            if "ERR_NAME_NOT_RESOLVED" in err_str or "could not translate host name" in err_str:
+                from urllib.parse import urlparse
+                domain = urlparse(request.url).netloc
+                if domain:
+                    await loop.run_in_executor(None, self.add_domain_to_blacklist_sync, domain, "no_dns")
+            await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'failed')
+        elif retry_count >= MAX_RETRIES:
              await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'failed')
         else:
              next_try = datetime.now() + timedelta(hours=1)
