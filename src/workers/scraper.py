@@ -20,7 +20,7 @@ from src.utils.language import detect_language
 from src.utils.urls import extract_domain
 from src.utils.logging_config import setup_logging
 from src.utils.multipage import find_promising_links
-from config.settings import SCRAPE_DELAY, USER_AGENT, MAX_RETRIES, PLAYWRIGHT_HEADLESS, LOG_DIR, SCRAPE_TIMEOUT, REQUEUE_INTERVAL_DAYS
+from config.settings import SCRAPE_DELAY, USER_AGENT, MAX_RETRIES, PLAYWRIGHT_HEADLESS, LOG_DIR, SCRAPE_TIMEOUT, REQUEUE_INTERVAL_DAYS, SCRAPER_MAX_RUNTIME_SECONDS
 
 class Scraper:
     def __init__(self):
@@ -109,11 +109,11 @@ class Scraper:
                     cur.execute("""
                         UPDATE scr_scrape_queue
                         SET status = %s, retry_count = %s, next_scrape_at = %s
-                        WHERE id = %s
+                        WHERE queue_id = %s
                     """, (status, retry_count, next_scrape_at, queue_id))
                 else:
                     cur.execute("""
-                        UPDATE scr_scrape_queue SET status = %s WHERE id = %s
+                        UPDATE scr_scrape_queue SET status = %s WHERE queue_id = %s
                     """, (status, queue_id))
                 conn.commit()
         finally:
@@ -391,8 +391,15 @@ class Scraper:
 
     async def run(self):
         self.logger.info("Starting Crawlee Scraper...")
+        start_time = time.time()
 
         while True:
+            # Check elapsed time
+            elapsed = time.time() - start_time
+            if elapsed >= SCRAPER_MAX_RUNTIME_SECONDS:
+                self.logger.info(f"Max runtime reached ({elapsed:.0f}s >= {SCRAPER_MAX_RUNTIME_SECONDS}s). Exiting cleanly.")
+                break
+
             # 1. Reset global state at the start of each iteration to prevent accumulation and ServiceConflictError
             self.reset_crawlee_global_state()
 
@@ -400,9 +407,8 @@ class Scraper:
             # Used small batch size (20) to ensure regular browser restarts and avoid memory leaks/hangs
             batch = self.fetch_batch(20)
             if not batch:
-                self.logger.info("Queue empty, waiting...")
-                await asyncio.sleep(60)
-                continue
+                self.logger.info("Queue empty, exiting.")
+                sys.exit(10)
 
             self.logger.info(f"Fetched {len(batch)} URLs")
 

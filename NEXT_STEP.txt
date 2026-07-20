@@ -1,0 +1,50 @@
+- skript run_scraper.sh funguje uz nekolik dni a data z fronty pomalu mizi. to je uspech.
+- podle vysledku je 1/3 url z fronty konci 'failed' je potreba to analyzovat z zjistit detaily, pripadne jestli je chyba na nasi strane, jestli je neopravitelna chyba na jejich strane, jestli stranka neexistuje, jestli jsme neprosli pres WAF atd ... zkratka pokusit se rozvest 'failded' na vic stavu.
+- podle pozadavku nalezenych v jira navrhnout dalsi plan
+
+
+
+## TODO
+
+### Skripty
+
+
+
+### Webscraper API
+Budu potřebovat API pro přístup ke staženým stránkám z webu. 
+- getInfo(URL) 
+    - Máme v db, ve frontě, staženo, víc časových verzi
+    - Lze to sosnout staticky (curl), přes browser(playwright), přes ochcavac, neexistuje, chyba v URL, ...
+    - Podporuje https
+    - datum 1. verze, 
+    - datum poslední verze
+    - typWebu  - Je to single page web, nebo malý web do 10 stránek, velký web, mega web (Facebook), 
+    - pro maly web byto chtelo umet contat v markdown(MD)
+    - latestHtmlLink nekde na sdilenem NFS 
+    - latestHtmlSize - bez komprese
+    - latestMarkdownLink
+    - latestMarkdownSize
+    - prevHtmlLink nekde na sdilenem NFS 
+    - prevHtmlSize - bez komprese
+    - prevMarkdownLink
+    - prevMarkdownSize
+    - diffMarkdownLink
+    - latestScreenshotLink (webp , w1080)
+    - canonicalUrl - v pripade, preklepu, redirectu, zmeny http na https ... 
+    - externi odkazy na strance 
+    -  externi odkazy na stranky co taky sosame
+
+kdyz zadam URL napr http://www.example.com/?xxx=123
+- pokusi se najit stejny, pripadne variace na stejnou
+- protokol http|https je identicka adresa
+- http://www.example.com/?xxx=123 vs https://www.example.com?xxx=123#mojekotva je pro maly weby identicka adresa , pro velky ne!
+- pokud se nenajde ani to, tak pro maly weby staci vratit root, tam je vetsinou to co potrebujeme.
+
+- Data uložená na NFS, rozmatitejsi adresarovy strom max 1000 polozek v adresari,  komprese gz. NFS protože pro to poběží na Linux kontaineru a je to efektivnejsi nez Samba(cifs).
+- Metadata někde asi postgres (ale je my to buřt, chci API) 
+
+WEB UI
+minimum lze vlozit URL a ziskat aktualni informace, pokud je mame, pokud ne, tak se vlozi do fronty (s prioritou 10), pripadne lze vlozit vice url s prioritou 5 pomoci nahrani textoveho souboru (1 url na radku) tam se je vlozi nezname url do fronty. a ukaze kolik jich tam pribulo.
+hlavni stranka by mela mit nejaky jednoduchy dash board (kolik stranek celkem, kolik ve fronte, graf rychlosti kolik stranek se sosa za den)
+- framework asi vuejs, co vola vyse uvedeme API cili knihovna na volani backendu je 100% generovana z open_api
+

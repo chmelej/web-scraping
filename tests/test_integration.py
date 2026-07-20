@@ -20,10 +20,9 @@ def test_full_flow_mock(mock_conn_parser, mock_conn_scraper):
         'headers': {}
     }
 
-    with patch.object(scraper, 'scrape_url', return_value=result):
-        # We can't easily test process_one without more complex DB mocking (cursors returning specific values)
-        # But we can verify components exist and instantiate
-        assert scraper is not None
+    # We can't easily test process_one without more complex DB mocking (cursors returning specific values)
+    # But we can verify components exist and instantiate
+    assert scraper is not None
 
     parser = Parser()
     assert parser is not None

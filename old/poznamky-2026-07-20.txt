@@ -1,5 +1,4 @@
 ## TODO
-- porad jsme nevyresili zasekavani scraper.py jako workaround ho po 10 minutach zabijeme parent procesem. Takze pokud neni zaseknuty tak zahodime cast prace. Lepsi reseni je po 8 minutach scraper.py sam ukonci cinnost (nejaky specificky exit kod) a parent process pusti dalsi instanci. pouze pokud je po 10 minutach zaseknuty tak ho killnem.
 
 ## Hotovo
 - pri testovani nefunguje scaper
@@ -18,3 +17,4 @@
 
 - nekde v kodu jsem nasel `click.argument('uni_listing_id', type=int)` unit_listing_id je typu varchar(50) napriklad 'L1234'
 - scraper.py stejne jako parser.py pokud je fronta prazdna tak konci.
+- porad jsme nevyresili zasekavani scraper.py jako workaround ho po 10 minutach zabijeme parent procesem. Takze pokud neni zaseknuty tak zahodime cast prace. Lepsi reseni je po 8 minutach scraper.py sam ukonci cinnost (nejaky specificky exit kod) a parent process pusti dalsi instanci. pouze pokud je po 10 minutach zaseknuty tak ho killnem.

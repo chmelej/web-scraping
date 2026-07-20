@@ -102,6 +102,9 @@ uv run python -m spacy download en_core_web_lg   # angličtina
 
 # Instaluj Playwright prohlížeče
 uv run playwright install chromium
+
+# Instaluj chybějící systémové závislosti pro prohlížeč (vyžaduje sudo)
+uv run playwright install-deps chromium
 ```
 
 ### 5. Databázové migrace

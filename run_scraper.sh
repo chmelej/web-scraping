@@ -1,8 +1,8 @@
 #!/bin/bash
 while true; do
-    # Run scraper with a 5-minute timeout (300s).
+    # Run scraper with a 10-minute timeout (600s).
     # If it hangs, send SIGTERM. If it ignores that for 10s, send SIGKILL.
-    timeout --kill-after=10s 300s uv run python -m src.workers.scraper
+    timeout --kill-after=10s 600s uv run python -m src.workers.scraper
     EXIT_CODE=$?
     
     # timeout command returns 124 if it timed out

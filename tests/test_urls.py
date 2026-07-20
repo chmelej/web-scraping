@@ -4,7 +4,8 @@ from src.utils.urls import normalize_url, extract_domain, same_domain, is_valid_
 def test_normalize_url():
     assert normalize_url('https://Example.com/') == 'https://example.com'
     assert normalize_url('http://test.com#anchor') == 'http://test.com'
-    assert normalize_url('http://test.com?q=1') == 'http://test.com'
+    assert normalize_url('http://test.com?q=1') == 'http://test.com?q=1'
+    assert normalize_url('http://test.com?q=1&utm_source=fb') == 'http://test.com?q=1'
 
 def test_extract_domain():
     assert extract_domain('https://www.example.com/path') == 'www.example.com'

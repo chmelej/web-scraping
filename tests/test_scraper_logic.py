@@ -20,7 +20,7 @@ class TestScraperLogic(unittest.TestCase):
 
         # Mock result for fetch_batch
         # fetchall should return a list of dicts (RealDictCursor)
-        mock_cur.fetchall.return_value = [{'id': 1, 'url': 'http://example.com', 'uni_listing_id': 100, 'retry_count': 0, 'depth': 0}]
+        mock_cur.fetchall.return_value = [{'queue_id': 1, 'url': 'http://example.com', 'uni_listing_id': 100, 'retry_count': 0, 'depth': 0}]
 
         scraper = Scraper()
         batch = scraper.fetch_batch(1)

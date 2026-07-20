@@ -17,5 +17,5 @@ def test_detect_unknown():
     html = '<html><body>...</body></html>'
     lang, conf = detect_language(html)
     # Could be unknown or something random, but checks handling
-    assert isinstance(lang, str)
-    assert isinstance(conf, float)
+    assert lang is None
+    assert conf == 0.0

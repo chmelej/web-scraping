@@ -18,3 +18,4 @@ venv/
 *.py[cod]
 /uv.lock
 /docs/crawlee-python.repomix.xml
+/storage/

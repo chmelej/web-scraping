@@ -40,8 +40,8 @@ def clean_url(url):
             fragment=''
         )
         
-        # Remove trailing slash from path if it's not root
-        if cleaned.path != '/' and cleaned.path.endswith('/'):
+        # Remove trailing slash from path
+        if cleaned.path.endswith('/'):
             cleaned = cleaned._replace(path=cleaned.path.rstrip('/'))
 
         return urlunparse(cleaned)

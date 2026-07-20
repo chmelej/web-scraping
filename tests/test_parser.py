@@ -16,7 +16,7 @@ def test_parse_simple_page(mock_db_parser):
     <body>
         <p>Email: info@test.cz</p>
         <p>Tel: +420 123 456 789</p>
-        <p>IČO: 12345678</p>
+        <p>IČO: 25596641</p>
     </body>
     </html>
     """
@@ -25,5 +25,5 @@ def test_parse_simple_page(mock_db_parser):
 
     assert 'info@test.cz' in data['emails']
     assert len(data['phones']) > 0
-    assert data['ico'] == '12345678'
+    assert data['org_num'] == '25596641'
     assert data['company_name'] == 'Test Firma s.r.o.'
