@@ -20,6 +20,7 @@ from src.utils.language import detect_language
 from src.utils.urls import extract_domain
 from src.utils.logging_config import setup_logging
 from src.utils.multipage import find_promising_links
+from src.utils.storage import save_raw_html
 from config.settings import SCRAPE_DELAY, USER_AGENT, MAX_RETRIES, PLAYWRIGHT_HEADLESS, LOG_DIR, SCRAPE_TIMEOUT, REQUEUE_INTERVAL_DAYS, SCRAPER_MAX_RUNTIME_SECONDS
 
 class Scraper:
@@ -204,18 +205,27 @@ class Scraper:
 
                 cur.execute("""
                     INSERT INTO scr_scrape_results
-                    (queue_id, url, html, status_code, headers, ip_address,
+                    (queue_id, url, html, html_path, html_size, status_code, headers, ip_address,
                      redirected_from, detected_language, language_confidence, error_message)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING result_id
                 """, (
-                    queue_id, url, scrape_result.get('html'), scrape_result.get('status_code'),
+                    queue_id, url, None, None, 0, scrape_result.get('status_code'),
                     json.dumps(scrape_result.get('headers')) if scrape_result.get('headers') else None,
                     scrape_result.get('ip_address'),
                     scrape_result.get('redirected_from'), lang, lang_conf,
                     scrape_result.get('error')
                 ))
                 result_id = cur.fetchone()[0]
+
+                if scrape_result.get('html'):
+                    html_path, html_size = save_raw_html(url, scrape_result['html'], result_id=result_id)
+                    cur.execute("""
+                        UPDATE scr_scrape_results
+                        SET html_path = %s, html_size = %s
+                        WHERE result_id = %s
+                    """, (html_path, html_size, result_id))
+
                 conn.commit()
                 self.logger.debug(f"Result saved with ID {result_id}")
                 return result_id

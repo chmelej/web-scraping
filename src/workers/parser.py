@@ -10,6 +10,7 @@ from src.utils.address import extract_addresses_from_text
 from src.utils.logging_config import setup_logging
 from src.utils.country import detect_country
 from src.utils.multipage import find_promising_links
+from src.utils.storage import read_raw_html
 from config.settings import LOG_DIR
 
 class Parser:
@@ -21,11 +22,11 @@ class Parser:
         """Získá další scrape_result k parsování"""
         with get_cursor(self.conn) as cur:
             cur.execute("""
-                SELECT r.result_id, r.html, r.detected_language, r.url, r.queue_id, q.depth, q.opco
+                SELECT r.result_id, r.html, r.html_path, r.detected_language, r.url, r.queue_id, q.depth, q.opco
                 FROM scr_scrape_results r
                 LEFT JOIN scr_scrape_queue q ON r.queue_id = q.queue_id
                 WHERE r.processing_status = 'new'
-                  AND r.html IS NOT NULL
+                  AND (r.html IS NOT NULL OR r.html_path IS NOT NULL)
                 ORDER BY r.scraped_at ASC
                 LIMIT 1
                 FOR UPDATE OF r SKIP LOCKED
@@ -192,7 +193,12 @@ class Parser:
             return False
 
         result_id = item['result_id']
-        html = item['html']
+        html = read_raw_html(item)
+        if not html:
+            self.logger.warning(f"Could not read HTML for result_id {result_id}")
+            self.update_status(result_id, 'failed')
+            return False
+
         language = item['detected_language']
         url = item['url']
         queue_id = item['queue_id']
