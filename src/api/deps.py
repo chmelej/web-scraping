@@ -7,6 +7,7 @@ from config.settings import DATABASE_URL
 def get_db_connection() -> Iterator[psycopg2.extensions.connection]:
     """Dependency to get a database connection."""
     conn = psycopg2.connect(DATABASE_URL)
+
     try:
         yield conn
     finally:
