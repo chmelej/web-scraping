@@ -28,3 +28,6 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 # Scraper Runtime
 SCRAPER_MAX_RUNTIME_SECONDS = int(os.getenv('SCRAPER_MAX_RUNTIME_SECONDS', 480))
 
+# Raw HTML Disk/NFS Storage
+RAW_HTML_DIR = os.getenv('RAW_HTML_DIR', 'data/raw-html')
+ENABLE_RAW_HTML_STORAGE = os.getenv('ENABLE_RAW_HTML_STORAGE', 'true').lower() == 'true'
