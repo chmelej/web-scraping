@@ -26,7 +26,6 @@ app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboar
 @app.get("/api/v1/health")
 async def health_check():
     return {"status": "healthy"}
-
 # Serve the static Vue frontend files if they exist
 web_dist_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "web", "dist")
 
