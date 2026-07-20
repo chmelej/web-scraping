@@ -29,7 +29,7 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
         try:
             # Check if URL exists and is in pending/processing
             cursor.execute("""
-                SELECT id, status FROM scr_scrape_queue
+                SELECT queue_id, status FROM scr_scrape_queue
                 WHERE url = %s AND (uni_listing_id = %s OR (uni_listing_id IS NULL AND %s IS NULL))
             """, (url_str, item.uni_listing_id, item.uni_listing_id))
 
@@ -39,7 +39,7 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
                 if existing['status'] in ('pending', 'processing'):
                     return QueueItemResponse(
                         message="URL already in queue",
-                        id=existing['id'],
+                        id=existing['queue_id'],
                         url=url_str,
                         status=existing['status']
                     )
@@ -49,13 +49,13 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
                         UPDATE scr_scrape_queue
                         SET status = 'pending', priority = %s, retry_count = 0, next_scrape_at = NOW()
                         WHERE id = %s
-                        RETURNING id, status
-                    """, (item.priority, existing['id']))
+                        RETURNING queue_id, status
+                    """, (item.priority, existing['queue_id']))
                     updated = cursor.fetchone()
                     db.commit()
                     return QueueItemResponse(
                         message="URL requeued successfully",
-                        id=updated['id'],
+                        id=updated['queue_id'],
                         url=url_str,
                         status=updated['status']
                     )
@@ -64,7 +64,7 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
             cursor.execute("""
                 INSERT INTO scr_scrape_queue (url, uni_listing_id, priority, status)
                 VALUES (%s, %s, %s, 'pending')
-                RETURNING id, status
+                RETURNING queue_id, status
             """, (url_str, item.uni_listing_id, item.priority))
 
             new_item = cursor.fetchone()
@@ -72,7 +72,7 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
 
             return QueueItemResponse(
                 message="URL added to queue successfully",
-                id=new_item['id'],
+                id=new_item['queue_id'],
                 url=url_str,
                 status=new_item['status']
             )
@@ -103,7 +103,7 @@ async def bulk_add_to_queue(file: UploadFile = File(...), db: psycopg2.extension
                     continue
 
                 # Check if exists
-                cursor.execute("SELECT id, status FROM scr_scrape_queue WHERE url = %s", (url_str,))
+                cursor.execute("SELECT queue_id, status FROM scr_scrape_queue WHERE url = %s", (url_str,))
                 existing = cursor.fetchone()
 
                 if existing:
@@ -113,7 +113,7 @@ async def bulk_add_to_queue(file: UploadFile = File(...), db: psycopg2.extension
                             UPDATE scr_scrape_queue
                             SET status = 'pending', priority = %s, retry_count = 0, next_scrape_at = NOW()
                             WHERE id = %s
-                        """, (priority, existing['id']))
+                        """, (priority, existing['queue_id']))
                         added_count += 1
                     else:
                         skipped_count += 1
@@ -221,7 +221,7 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
 
         # Fetch parsed data if available
         if latest_result:
-             cursor.execute("SELECT data FROM scr_parsed_data WHERE scrape_result_id = %s", (latest_result['id'],))
+             cursor.execute("SELECT data FROM scr_parsed_data WHERE scrape_result_id = %s", (latest_result['result_id'],))
              parsed_data = cursor.fetchone()
              if parsed_data:
                  response_data["extracted_data"] = parsed_data['data']

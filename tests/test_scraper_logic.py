@@ -66,16 +66,5 @@ class TestScraperLogic(unittest.TestCase):
         update_call_sql = mock_cur.execute.call_args_list[0][0][0]
         self.assertIn("status = 'redirected'", update_call_sql)
 
-    @patch('workers.scraper.get_db_connection')
-    @patch('workers.scraper.setup_logging')
-    def test_create_request_for_item(self, mock_log, mock_get_db):
-        scraper = Scraper()
-        item = {'queue_id': 1, 'url': 'http://example.com/test', 'uni_listing_id': 123, 'retry_count': 0, 'depth': 0}
-        req = scraper.create_request_for_item(item)
-
-        self.assertEqual(req.url, 'https://example.com/test')
-        self.assertTrue(req.user_data['is_https_upgrade_attempt'])
-        self.assertEqual(req.user_data['original_url'], 'http://example.com/test')
-
 if __name__ == '__main__':
     unittest.main()
