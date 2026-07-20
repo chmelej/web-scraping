@@ -26,33 +26,8 @@ class Scraper:
     def __init__(self):
         self.conn = get_db_connection()
         self.logger = setup_logging('scraper', f'{LOG_DIR}/scraper.log')
-        self._current_crawler = None
         # Suppress verbose Crawlee errors (stack traces for 404s/DNS)
         # logging.getLogger('crawlee.crawlers._playwright._playwright_crawler').setLevel(logging.CRITICAL)
-
-    def create_request_for_item(self, item):
-        """Build a Crawlee Request for a queue item, proactively upgrading http:// to https://"""
-        raw_url = item['url']
-        target_url = raw_url
-        is_https_upgrade = False
-
-        if raw_url.startswith("http://"):
-            target_url = "https://" + raw_url[7:]
-            is_https_upgrade = True
-
-        return Request.from_url(
-            target_url,
-            user_data={
-                "queue_id": item['queue_id'],
-                "retry_count": item['retry_count'],
-                "uni_listing_id": item['uni_listing_id'],
-                "opco": item.get('opco'),
-                "depth": item['depth'],
-                "priority": item.get('priority', 0),
-                "original_url": raw_url,
-                "is_https_upgrade_attempt": is_https_upgrade
-            }
-        )
 
     def cleanup_temp_dirs(self):
         """Clean up temporary directories created by Playwright/Crawlee and kill zombies"""
@@ -149,7 +124,7 @@ class Scraper:
                 # 1. Mark original item as 'redirected'
                 cur.execute("""
                     UPDATE scr_scrape_queue
-                    SET status = 'redirected'
+                    SET status = 'redirected', completed_at = NOW()
                     WHERE queue_id = %s
                 """, (queue_id,))
 
@@ -318,24 +293,19 @@ class Scraper:
             
             result['html'] = content
             
-            # Check for redirect (client-side or server-side) or HTTPS upgrade
+            # Check for redirect (client-side or server-side)
             final_url = page.url
-            original_url = request.user_data.get('original_url', request.url)
-            is_https_upgrade = request.user_data.get('is_https_upgrade_attempt', False)
-
             target_url = request.url
             target_queue_id = queue_id
-
-            if is_https_upgrade or (final_url and final_url != original_url):
-                 effective_final_url = final_url if final_url else request.url
-                 self.logger.info(f"Redirect / HTTPS upgrade: {original_url} -> {effective_final_url}")
-                 result['redirected_from'] = original_url
-                 target_url = effective_final_url
+            if final_url and final_url != request.url:
+                 self.logger.info(f"Redirect detected: {request.url} -> {final_url}")
+                 result['redirected_from'] = request.url
+                 target_url = final_url
                  opco = request.user_data.get('opco')
                  priority = request.user_data.get('priority', 0)
                  loop = asyncio.get_running_loop()
                  target_queue_id = await loop.run_in_executor(
-                     None, self.handle_redirect_sync, queue_id, original_url, effective_final_url, uni_listing_id, opco, depth, priority
+                     None, self.handle_redirect_sync, queue_id, request.url, final_url, uni_listing_id, opco, depth, priority
                  )
             
             # Extract more info from the page/response
@@ -405,29 +375,6 @@ class Scraper:
         
         # Simple one-line warning
         self.logger.warning(f"Page unavailable: {request.url} ({err_str})")
-
-        # Fallback to HTTP if proactive HTTPS upgrade failed
-        is_https_upgrade = request.user_data.get('is_https_upgrade_attempt', False)
-        original_url = request.user_data.get('original_url', request.url)
-
-        if is_https_upgrade and original_url != request.url:
-            self.logger.info(f"HTTPS upgrade attempt failed for {request.url} ({err_str}), falling back to HTTP: {original_url}")
-            fallback_request = Request.from_url(
-                original_url,
-                user_data={
-                    "queue_id": queue_id,
-                    "retry_count": retry_count,
-                    "uni_listing_id": request.user_data.get('uni_listing_id'),
-                    "opco": request.user_data.get('opco'),
-                    "depth": request.user_data.get('depth', 0),
-                    "priority": request.user_data.get('priority', 0),
-                    "original_url": original_url,
-                    "is_https_upgrade_attempt": False
-                }
-            )
-            if self._current_crawler:
-                await self._current_crawler.add_requests([fallback_request])
-                return
         
         result = {
             'html': None,
@@ -473,7 +420,18 @@ class Scraper:
         # Mark as processing
         self.update_queue_status_sync(item['queue_id'], 'processing')
 
-        request_list = [self.create_request_for_item(item)]
+        request_list = [
+            Request.from_url(
+                item['url'],
+                user_data={
+                    "queue_id": item['queue_id'],
+                    "retry_count": item['retry_count'],
+                    "uni_listing_id": item['uni_listing_id'],
+                    "opco": item.get('opco'),
+                    "depth": item['depth']
+                }
+            )
+        ]
 
         async def run_crawler():
             self.logger.debug("Initializing PlaywrightCrawler")
@@ -486,7 +444,6 @@ class Scraper:
                 browser_launch_options={"args": ["--no-sandbox"]},
             )
             crawler.failed_request_handler = self.failed_request_handler
-            self._current_crawler = crawler
             self.logger.debug("Running crawler")
             await crawler.run(request_list)
             self.logger.debug("Crawler finished")
@@ -541,7 +498,18 @@ class Scraper:
             for item in batch:
                 # Mark as processing immediately
                 self.update_queue_status_sync(item['queue_id'], 'processing')
-                request_list.append(self.create_request_for_item(item))
+                request_list.append(
+                    Request.from_url(
+                        item['url'],
+                        user_data={
+                            "queue_id": item['queue_id'],
+                            "retry_count": item['retry_count'],
+                            "uni_listing_id": item['uni_listing_id'],
+                            "opco": item.get('opco'),
+                            "depth": item['depth']
+                        }
+                    )
+                )
 
             # Configure Crawler with isolation
             crawler = PlaywrightCrawler(
@@ -550,12 +518,15 @@ class Scraper:
                 storage_client=MemoryStorageClient(),
                 max_requests_per_crawl=25,
                 headless=PLAYWRIGHT_HEADLESS,
+                browser_type='chromium',
                 request_handler_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
                 navigation_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
-                browser_launch_options={"args": ["--no-sandbox"]},
+                browser_launch_options={
+                    "args": ["--no-sandbox", "--disable-dev-shm-usage"],
+                    "handle_sigint": False,
+                },
             )
             crawler.failed_request_handler = self.failed_request_handler
-            self._current_crawler = crawler
 
             # Run crawler on this batch
             try:
