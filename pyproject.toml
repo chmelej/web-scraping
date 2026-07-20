@@ -19,6 +19,9 @@ dependencies = [
     "requests",
     "datefinder",
     "profusion>=0.1.3",
+    "fastapi>=0.139.2",
+    "uvicorn>=0.51.0",
+    "python-multipart>=0.0.32",
 ]
 
 [project.optional-dependencies]
