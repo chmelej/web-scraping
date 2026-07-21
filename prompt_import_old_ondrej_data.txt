@@ -1,0 +1,35 @@
+mame starou scraper aplikaci a zustala nam data, chceme je zmigrovat do nove aplikace
+
+1) tsv soubor s metadaty - ten asi bude vhodne ulozit do docasne sql tabulky. ukazka souboru je 0/BE-BT205-20240407-ips-url-selection-R53652R53653.tsv-head. UKOL: vytvorime prazdnou tabulku a importovaci skript import_ondrej_tsv.py <metadatafile>
+
+2) archiv je nekolik zip souboru, kde kazdy obsahuje stazene html soubory
+napr  soubor 0/00.zip obsahuje :
+0/files/http-alphacars-be-20231113103908.html
+0/files/http-alainposilovicavocatcharleroi-be-20210312230651.html
+0/files/http-arni-fr-20231113093814.html
+0/files/http-alarmesansfilliege-be-20210313012340.html
+0/files/http-antwerpstore-mini-be-20231108104732.html
+
+je videt ze nazev souboru obsahuje enkodovanou URL + casove razitko + priponu .html
+v meta datech by melo jit "enkodovane URL" vyvtorit z `sourcefile` nebo `url` - UKOL: znovu implementovat enkodovaci funkci a na datech overit ze funkguje.
+
+konverze casoveho razitka na datum a cas: 20231108104732 -> 2023-11-08T10:47:32
+
+UKOL: potom by uz nemel byt problem naimportovat data. priparvit skritp ktery provede import zipu
+for all queue/zips {
+    rozbal zip do tmp
+    for all htmls {
+        najdi v metadatech podle "enkodovane URL"
+        pokud se nepovedlo dohledat metadata, pokus se zrekonstruovat puvodni URL a zbytek pouzij defaultni hodnoty
+        vypln postupne tabulky scr_scrape_queue, scr_scrape_results a uloz soubor na spravne misto.
+    }
+    smaz vsechny html v tmp
+    presun zip do done/
+}
+
+TIP: zpracovani souboru jsem jiz delal viz: 1/extract_email_from_html_zips.py 1/extract_from_html_zips.py
+
+dotazy? nejasnosti? poznamky? pripominky?
+
+
+
