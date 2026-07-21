@@ -61,22 +61,36 @@ def parse_filename_info(filename: str):
 def reconstruct_url_from_filename(filename: str) -> str:
     """
     Reconstructs fallback URL from filename if metadata not found in DB.
-    e.g. 'http-alphacars-be-20231113103908.html' -> 'http://alphacars.be'
+    e.g. 'http-www-2consult-be-20231108131148.html' -> 'http://www.2consult.be'
+    e.g. 'http-christaoostendorp-be-contact-html-20231114145007.html' -> 'http://christaoostendorp.be/contact.html'
     """
-    scheme, key, _ = parse_filename_info(filename)
-    base = os.path.basename(filename)
-    m = re.match(r'^(?:http|https)?-?(.*?)-\d{14}\.html$', base, re.I)
-    raw_domain = m.group(1) if m else key
+    base = os.path.basename(filename).strip()
+    m = re.match(r'^(http|https|ftp)?-?(.*?)-(\d{14})\.html$', base, re.I)
+    if not m:
+        return 'http://' + base
+    scheme = (m.group(1) or 'http').lower()
+    raw = m.group(2)
     
-    # Replace single dashes before common TLDs or convert last dash to dot
-    # e.g. alphacars-be -> alphacars.be
-    if '-' in raw_domain:
-        parts = raw_domain.rsplit('-', 1)
-        domain = f"{parts[0]}.{parts[1]}"
-    else:
-        domain = raw_domain
+    # Fix www- prefix -> www.
+    if raw.startswith('www-'):
+        raw = 'www.' + raw[4:]
 
-    return f"{scheme}://{domain}"
+    # Match TLD
+    tld_match = re.search(r'-(be|com|eu|fr|nl|org|net|de|info|biz|brussels|vlaanderen|shop|online|ch|it|uk|lu|at)(?:-|$)', raw, re.I)
+    if tld_match:
+        tld = tld_match.group(1).lower()
+        start, end = tld_match.span()
+        domain_part = raw[:start].replace('-', '.') + '.' + tld
+        path_part = raw[end:]
+        if path_part:
+            path_part = '/' + path_part.replace('-html', '.html').replace('-', '/')
+        return f'{scheme}://{domain_part}{path_part}'
+    else:
+        if '-' in raw:
+            parts = raw.rsplit('-', 1)
+            return f'{scheme}://{parts[0].replace("-", ".")}.{parts[1]}'
+        else:
+            return f'{scheme}://{raw}'
 
 def process_single_zip(zip_path: str, conn, logger):
     logger.info(f"Processing ZIP file: {zip_path}")
@@ -93,13 +107,15 @@ def process_single_zip(zip_path: str, conn, logger):
 
             # Lookup metadata in DB
             metadata = None
+            alt_key = enc_key[4:] if enc_key.startswith('www-') else f"www-{enc_key}"
             with get_cursor(conn) as cur:
                 cur.execute("""
                     SELECT sourcefile_url, system_url, status_code, redirect_as
                     FROM tmp_ondrej_metadata
                     WHERE encoded_sourcefile = %s OR encoded_system_url = %s
+                       OR encoded_sourcefile = %s OR encoded_system_url = %s
                     LIMIT 1
-                """, (enc_key, enc_key))
+                """, (enc_key, enc_key, alt_key, alt_key))
                 metadata = cur.fetchone()
 
             if metadata:
