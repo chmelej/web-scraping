@@ -18,11 +18,11 @@ class TestStorage(unittest.TestCase):
     def test_generate_html_file_path(self):
         url = "https://www.example.com/contact?q=test"
         path = generate_html_file_path(url, result_id=12345, base_dir=self.test_dir)
-
+        
         self.assertTrue(path.startswith(self.test_dir))
         self.assertTrue(path.endswith("_12345.html.gz"))
         self.assertIn("www.example.com", path)
-
+        
         # Check subdirectories structure: [base_dir]/[subdir1]/[subdir2]/[filename]
         parts = os.path.normpath(path).split(os.sep)
         self.assertGreaterEqual(len(parts), 4)
