@@ -45,7 +45,7 @@ def migrate_html_to_disk(batch_size=500):
 
                     try:
                         rel_path, uncompressed_size = save_raw_html(url, html_str, result_id=result_id)
-                        
+
                         cur.execute("""
                             UPDATE scr_scrape_results
                             SET html_path = %s,

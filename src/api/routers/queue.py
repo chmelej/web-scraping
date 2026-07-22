@@ -6,6 +6,8 @@ from typing import List, Optional, Any
 from urllib.parse import urlparse
 from ..deps import get_db_connection, get_cursor
 from ..utils.nfs import generate_nfs_path
+from ..utils.url import unify_url, get_url_hash
+
 
 router = APIRouter()
 
@@ -24,6 +26,8 @@ class QueueItemResponse(BaseModel):
 def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = Depends(get_db_connection)):
     """Add a single URL to the scraping queue."""
     url_str = str(item.url)
+    unified_str = unify_url(url_str)
+
 
     with db.cursor(cursor_factory=DictCursor) as cursor:
         try:
@@ -221,7 +225,8 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
 
         # Fetch parsed data if available
         if latest_result:
-             cursor.execute("SELECT data FROM scr_parsed_data WHERE scrape_result_id = %s", (latest_result['result_id'],))
+           cursor.execute("SELECT data FROM scr_parsed_data WHERE result_id = %s", (latest_result['result_id'],))
+
              parsed_data = cursor.fetchone()
              if parsed_data:
                  response_data["extracted_data"] = parsed_data['data']

@@ -175,3 +175,4 @@ Sales / DQ
 Nice-to-have
 The MockupDesign.zip on https://fcr-media.atlassian.net/browse/IPS-4247 is probably the most concrete UI design artifact that exists — worth checking with Tomas what's in there.
 
+

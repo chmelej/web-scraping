@@ -5,7 +5,7 @@ while true; do
     # If it hangs, send SIGTERM. If it ignores that for 10s, send SIGKILL.
     timeout --kill-after=10s 600s uv run python -m src.workers.scraper  &> "logs/scraper-`date +%s`.log"
     EXIT_CODE=$?
-   
+
     if [ -e 'STOP' ] ; then echo STOP ; rm 'STOP' ; exit 0 ; fi
 
     # timeout command returns 124 if it timed out

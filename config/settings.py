@@ -32,4 +32,3 @@ SCRAPER_MAX_RUNTIME_SECONDS = int(os.getenv('SCRAPER_MAX_RUNTIME_SECONDS', 480))
 RAW_HTML_DIR = os.getenv('RAW_HTML_DIR', 'data/raw-html')
 ENABLE_RAW_HTML_STORAGE = os.getenv('ENABLE_RAW_HTML_STORAGE', 'true').lower() == 'true'
 
-
