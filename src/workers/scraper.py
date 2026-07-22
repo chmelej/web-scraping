@@ -9,6 +9,7 @@ import tempfile
 import os
 import sys
 import subprocess
+import http.client
 from datetime import datetime, timedelta
 from crawlee import Request
 from crawlee.crawlers import PlaywrightCrawler
@@ -17,7 +18,7 @@ from crawlee.storage_clients import MemoryStorageClient
 from crawlee.configuration import Configuration
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.language import detect_language
-from src.utils.urls import extract_domain
+from src.utils.urls import extract_domain, normalize_url
 from src.utils.logging_config import setup_logging
 from src.utils.multipage import find_promising_links
 from src.utils.storage import save_raw_html
@@ -129,15 +130,17 @@ class Scraper:
                 if retry_count is not None and next_scrape_at is not None:
                     cur.execute("""
                         UPDATE scr_scrape_queue
-                        SET status = %s, retry_count = %s, next_scrape_at = %s
+                        SET status = %s, retry_count = %s, next_scrape_at = %s,
+                            last_scrape_at = CASE WHEN %s IN ('completed', 'failed') THEN NOW() ELSE last_scrape_at END
                         WHERE queue_id = %s
-                    """, (status, retry_count, next_scrape_at, queue_id))
+                    """, (status, retry_count, next_scrape_at, status, queue_id))
                 else:
                     cur.execute("""
                         UPDATE scr_scrape_queue
-                        SET status = %s
+                        SET status = %s,
+                            last_scrape_at = CASE WHEN %s IN ('completed', 'failed') THEN NOW() ELSE last_scrape_at END
                         WHERE queue_id = %s
-                    """, (status, queue_id))
+                    """, (status, status, queue_id))
                 conn.commit()
         finally:
             conn.close()
@@ -155,15 +158,17 @@ class Scraper:
                 """, (queue_id,))
 
                 # 2. Insert final_url into queue as new item (or return existing if present)
+                norm_final_url = normalize_url(final_url)
                 cur.execute("""
                     INSERT INTO scr_scrape_queue
-                    (url, uni_listing_id, opco, depth, priority, status)
-                    VALUES (%s, %s, %s, %s, %s, 'pending')
+                    (url, normalized_url, uni_listing_id, opco, depth, priority, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'pending')
                     ON CONFLICT (url) DO UPDATE
                     SET uni_listing_id = COALESCE(scr_scrape_queue.uni_listing_id, EXCLUDED.uni_listing_id),
-                        opco = COALESCE(scr_scrape_queue.opco, EXCLUDED.opco)
+                        opco = COALESCE(scr_scrape_queue.opco, EXCLUDED.opco),
+                        normalized_url = COALESCE(scr_scrape_queue.normalized_url, EXCLUDED.normalized_url)
                     RETURNING queue_id
-                """, (final_url, uni_listing_id, opco, depth, priority))
+                """, (final_url, norm_final_url, uni_listing_id, opco, depth, priority))
                 new_queue_id = cur.fetchone()[0]
                 conn.commit()
                 self.logger.info(f"Redirect handled: {original_url} (queue_id {queue_id} -> redirected) -> {final_url} (queue_id {new_queue_id})")
@@ -248,12 +253,14 @@ class Scraper:
              promising = find_promising_links(html, parent_url, language)
              with get_cursor(conn, dict_cursor=False) as cur:
                  for url, category in promising:
+                     norm_url = normalize_url(url)
                      cur.execute("""
                         INSERT INTO scr_scrape_queue
-                        (url, uni_listing_id, parent_scrape_id, depth, priority)
-                        VALUES (%s, %s, %s, %s, 5)
-                        ON CONFLICT (url) DO NOTHING
-                     """, (url, uni_listing_id, parent_id, depth + 1))
+                        (url, normalized_url, uni_listing_id, parent_scrape_id, depth, priority)
+                        VALUES (%s, %s, %s, %s, %s, 5)
+                        ON CONFLICT (url) DO UPDATE
+                        SET normalized_url = COALESCE(scr_scrape_queue.normalized_url, EXCLUDED.normalized_url)
+                     """, (url, norm_url, uni_listing_id, parent_id, depth + 1))
                  conn.commit()
 
              if promising:
@@ -358,6 +365,10 @@ class Scraper:
 
             if not result['status_code']:
                 result['status_code'] = 200
+
+            if result['status_code'] != 200 and not result.get('error'):
+                reason = http.client.responses.get(result['status_code'], 'HTTP Error')
+                result['error'] = f"status code: {result['status_code']} ({reason})"
 
             self.logger.debug(f"Got content for {target_url}, saving result...")
 

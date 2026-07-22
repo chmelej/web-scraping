@@ -65,11 +65,12 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
                     )
 
             # Insert new record
+            norm_url = normalize_url(url_str)
             cursor.execute("""
-                INSERT INTO scr_scrape_queue (url, uni_listing_id, priority, status)
-                VALUES (%s, %s, %s, 'pending')
+                INSERT INTO scr_scrape_queue (url, normalized_url, uni_listing_id, priority, status)
+                VALUES (%s, %s, %s, %s, 'pending')
                 RETURNING queue_id, status
-            """, (url_str, item.uni_listing_id, item.priority))
+            """, (url_str, norm_url, item.uni_listing_id, item.priority))
 
             new_item = cursor.fetchone()
             db.commit()
