@@ -35,62 +35,68 @@ def decode_html_bytes(raw_bytes: bytes) -> str:
 
 def parse_filename_info(filename: str):
     """
-    Parses zip HTML filename e.g. 'http-alphacars-be-20231113103908.html'
+    Parses zip HTML filename e.g. 'http-s-www-rubensexclusief-be-20231113103908.html'
     Returns (scheme, encoded_key, timestamp_dt)
     """
-    base = os.path.basename(filename)
-    m = re.match(r'^(http|https|ftp)?-?(.*?)-(\d{14})\.html$', base, re.I)
+    base = os.path.basename(filename).strip()
+    m = re.match(r'^(http-s|https-s|https|http|ftp)?-?(.*?)-(\d{14})\.html$', base, re.I)
     if not m:
-        # Fallback regex without scheme prefix
         m2 = re.match(r'^(.*?)-(\d{14})\.html$', base, re.I)
         if not m2:
             return "http", encode_url_key(base.replace('.html', '')), datetime.now()
-        key_part, ts_part = m2.groups()
         scheme = "http"
+        raw_key = m2.group(1)
+        ts_part = m2.group(2)
     else:
-        scheme_part, key_part, ts_part = m.groups()
-        scheme = scheme_part.lower() if scheme_part else "http"
+        scheme_part, raw_key, ts_part = m.groups()
+        if scheme_part and scheme_part.lower() in ('http-s', 'https-s', 'https'):
+            scheme = "https"
+        else:
+            scheme = "http"
 
     try:
         ts_dt = datetime.strptime(ts_part, "%Y%m%d%H%M%S")
     except ValueError:
         ts_dt = datetime.now()
 
-    return scheme, encode_url_key(key_part), ts_dt
+    return scheme, encode_url_key(raw_key), ts_dt
 
 def reconstruct_url_from_filename(filename: str) -> str:
     """
     Reconstructs fallback URL from filename if metadata not found in DB.
-    e.g. 'http-www-2consult-be-20231108131148.html' -> 'http://www.2consult.be'
-    e.g. 'http-christaoostendorp-be-contact-html-20231114145007.html' -> 'http://christaoostendorp.be/contact.html'
+    e.g. 'http-s-www-rubensexclusief-be-20231113103908.html' -> 'https://www.rubensexclusief.be'
+    e.g. 'https-www-walravens-partners-be-20231113075528.html' -> 'https://www.walravens-partners.be'
     """
     base = os.path.basename(filename).strip()
-    m = re.match(r'^(http|https|ftp)?-?(.*?)-(\d{14})\.html$', base, re.I)
-    if not m:
-        return 'http://' + base
-    scheme = (m.group(1) or 'http').lower()
-    raw = m.group(2)
-    
+    scheme, key, _ = parse_filename_info(filename)
+    m = re.match(r'^(?:http-s|https-s|https|http|ftp)?-?(.*?)-(\d{14})\.html$', base, re.I)
+    raw = m.group(1) if m else key
+
     # Fix www- prefix -> www.
+    has_www = False
     if raw.startswith('www-'):
-        raw = 'www.' + raw[4:]
+        has_www = True
+        raw = raw[4:]
 
     # Match TLD
     tld_match = re.search(r'-(be|com|eu|fr|nl|org|net|de|info|biz|brussels|vlaanderen|shop|online|ch|it|uk|lu|at)(?:-|$)', raw, re.I)
     if tld_match:
         tld = tld_match.group(1).lower()
         start, end = tld_match.span()
-        domain_part = raw[:start].replace('-', '.') + '.' + tld
+        domain_name = raw[:start]
+        prefix = 'www.' if has_www else ''
+        domain_part = f'{prefix}{domain_name}.{tld}'
         path_part = raw[end:]
         if path_part:
             path_part = '/' + path_part.replace('-html', '.html').replace('-', '/')
         return f'{scheme}://{domain_part}{path_part}'
     else:
+        prefix = 'www.' if has_www else ''
         if '-' in raw:
             parts = raw.rsplit('-', 1)
-            return f'{scheme}://{parts[0].replace("-", ".")}.{parts[1]}'
+            return f'{scheme}://{prefix}{parts[0]}.{parts[1]}'
         else:
-            return f'{scheme}://{raw}'
+            return f'{scheme}://{prefix}{raw}'
 
 def process_single_zip(zip_path: str, conn, logger):
     logger.info(f"Processing ZIP file: {zip_path}")

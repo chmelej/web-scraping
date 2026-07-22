@@ -378,32 +378,8 @@ class Scraper:
             self.logger.info(f"Finished processing {target_url}")
 
         except Exception as e:
-            err_str = str(e)
-            self.logger.warning(f"Error scraping {request.url}: {err_str}")
-            result['error'] = err_str
-
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self.save_result_sync, queue_id, request.url, result)
-
-            is_hard_failure = ("ERR_NAME_NOT_RESOLVED" in err_str or 
-                               "could not translate host name" in err_str or 
-                               "status code: 404" in err_str or 
-                               "status code: 410" in err_str)
-
-            if is_hard_failure:
-                if "ERR_NAME_NOT_RESOLVED" in err_str or "could not translate host name" in err_str:
-                    from urllib.parse import urlparse
-                    domain = urlparse(request.url).netloc
-                    if domain:
-                        await loop.run_in_executor(None, self.add_domain_to_blacklist_sync, domain, "no_dns")
-                await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'failed')
-            elif retry_count >= MAX_RETRIES:
-                 await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'failed')
-            else:
-                 next_try = datetime.now() + timedelta(hours=1)
-                 await loop.run_in_executor(None, self.update_queue_status_sync, queue_id, 'pending', retry_count + 1, next_try)
-            
-            self.logger.info(f"Finished processing (failed) {request.url}")
+            self.logger.warning(f"Error scraping {request.url}: {e}")
+            raise e
 
     async def failed_request_handler(self, context, error):
         """Handle failed requests"""
@@ -559,6 +535,7 @@ class Scraper:
                 request_handler=self.request_handler,
                 storage_client=MemoryStorageClient(),
                 max_requests_per_crawl=25,
+                max_request_retries=1,
                 headless=PLAYWRIGHT_HEADLESS,
                 request_handler_timeout=timedelta(seconds=SCRAPE_TIMEOUT),
                 navigation_timeout=timedelta(seconds=SCRAPE_TIMEOUT),

@@ -227,8 +227,8 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
         if latest_result:
            cursor.execute("SELECT data FROM scr_parsed_data WHERE result_id = %s", (latest_result['result_id'],))
 
-             parsed_data = cursor.fetchone()
-             if parsed_data:
-                 response_data["extracted_data"] = parsed_data['data']
+           parsed_data = cursor.fetchone()
+           if parsed_data:
+             response_data["extracted_data"] = parsed_data['data']
 
         return response_data
