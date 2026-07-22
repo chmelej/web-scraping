@@ -9,61 +9,97 @@ from src.utils.db import get_db_connection, get_cursor
 from src.utils.logging_config import setup_logging
 from config.settings import LOG_DIR
 
-def deduplicate_results(batch_size=1000):
+def deduplicate_results(batch_queue_size=200):
     logger = setup_logging('deduplicate_results', f"{LOG_DIR}/deduplicate_results.log")
     logger.info("Starting cleanup of rapid-fire duplicate scrape_results (DB & FileSystem)...")
 
     conn = get_db_connection()
     total_deleted_db = 0
     total_deleted_files = 0
+    total_relinked_parsed = 0
 
     try:
         while True:
-            # 1. Fetch batch of duplicate result_ids and their html_paths
+            # 1. Fetch a batch of queue_ids that have duplicate results
             with get_cursor(conn) as cur:
                 cur.execute("""
-                    SELECT r1.result_id, r1.html_path
-                    FROM scr_scrape_results r1
-                    JOIN scr_scrape_results r2 
-                      ON r1.queue_id = r2.queue_id 
-                     AND r1.result_id < r2.result_id
-                     AND ABS(EXTRACT(EPOCH FROM (r2.scraped_at - r1.scraped_at))) <= 300
+                    SELECT queue_id
+                    FROM scr_scrape_results
+                    GROUP BY queue_id
+                    HAVING COUNT(*) > 1
                     LIMIT %s
-                """, (batch_size,))
-                rows = cur.fetchall()
+                """, (batch_queue_size,))
+                queue_rows = cur.fetchall()
 
-            if not rows:
+            if not queue_rows:
                 break
 
-            result_ids = [r['result_id'] for r in rows]
+            queue_ids = [r['queue_id'] for r in queue_rows]
 
-            # 2. Delete corresponding HTML files from FS/NFS
-            for r in rows:
-                html_path = r.get('html_path')
-                if html_path:
-                    full_path = os.path.abspath(html_path)
-                    if os.path.exists(full_path):
-                        try:
-                            os.remove(full_path)
-                            total_deleted_files += 1
-                        except Exception as e:
-                            logger.warning(f"Failed to delete file {full_path}: {e}")
-
-            # 3. Delete duplicate DB rows
             with get_cursor(conn, dict_cursor=False) as cur:
-                placeholders = ','.join(['%s'] * len(result_ids))
-                cur.execute(f"DELETE FROM scr_scrape_results WHERE result_id IN ({placeholders})", tuple(result_ids))
+                for qid in queue_ids:
+                    # Select all results for this queue_id, prioritizing processed/parsed records
+                    cur.execute("""
+                        SELECT r.result_id, r.html_path, r.processing_status,
+                               EXISTS (SELECT 1 FROM scr_parsed_data p WHERE p.result_id = r.result_id) as is_parsed
+                        FROM scr_scrape_results r
+                        WHERE r.queue_id = %s
+                        ORDER BY (CASE WHEN r.processing_status = 'processed' THEN 2 
+                                       WHEN EXISTS (SELECT 1 FROM scr_parsed_data p WHERE p.result_id = r.result_id) THEN 1 
+                                       ELSE 0 END) DESC, 
+                                 r.result_id DESC
+                    """, (qid,))
+                    results = cur.fetchall()
+
+                    if len(results) <= 1:
+                        continue
+
+                    # Kept record is the first element
+                    kept_id = results[0][0]
+                    kept_path = results[0][1]
+
+                    to_delete_ids = []
+                    for row in results[1:]:
+                        del_id = row[0]
+                        del_path = row[1]
+                        to_delete_ids.append(del_id)
+
+                        # Delete FS file if path exists and differs from kept_path
+                        if del_path and del_path != kept_path:
+                            full_path = os.path.abspath(del_path)
+                            if os.path.exists(full_path):
+                                try:
+                                    os.remove(full_path)
+                                    total_deleted_files += 1
+                                except Exception as e:
+                                    logger.warning(f"Failed to delete file {full_path}: {e}")
+
+                    # Re-link any foreign keys in scr_parsed_data to kept_id
+                    del_placeholders = ','.join(['%s'] * len(to_delete_ids))
+                    cur.execute(f"""
+                        UPDATE scr_parsed_data
+                        SET result_id = %s
+                        WHERE result_id IN ({del_placeholders})
+                    """, [kept_id] + to_delete_ids)
+                    total_relinked_parsed += cur.rowcount
+
+                    # Delete duplicate DB rows from scr_scrape_results
+                    cur.execute(f"""
+                        DELETE FROM scr_scrape_results
+                        WHERE result_id IN ({del_placeholders})
+                    """, tuple(to_delete_ids))
+                    total_deleted_db += cur.rowcount
+
                 conn.commit()
 
-            total_deleted_db += len(result_ids)
-            logger.info(f"Progress: removed {total_deleted_db} DB rows, {total_deleted_files} files from FS...")
+            logger.info(f"Progress: removed {total_deleted_db} DB rows, {total_deleted_files} files from FS, relinked {total_relinked_parsed} parsed rows...")
 
     except Exception as e:
         logger.error(f"Error during deduplication: {e}", exc_info=True)
     finally:
         conn.close()
 
-    logger.info(f"Deduplication completed! Total DB rows removed: {total_deleted_db}, FS files deleted: {total_deleted_files}.")
+    logger.info(f"Deduplication completed! Total DB rows removed: {total_deleted_db}, FS files deleted: {total_deleted_files}, Relinked parsed records: {total_relinked_parsed}.")
 
 if __name__ == '__main__':
     deduplicate_results()
