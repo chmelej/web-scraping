@@ -1,0 +1,9 @@
+projdi soubory a inizializuj kontext projektu. over aktualni stav a navrhni dalsi postup:
+docs/Web_scraping_system_pro_extrakci_firemnich_dat.md
+docs/admin_manual.md
+docs/crawlee-python.repomix.xml
+poznamky.txt
+summary-01.md
+summary-02.md
+summary-03.md
+summary-04.md
