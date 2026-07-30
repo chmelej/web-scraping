@@ -22,6 +22,12 @@ export const enqueueUrl = async (url: string, priority: number = 10) => {
   return data;
 };
 
+export const manualUpdateUrl = async (url: string, html: string, queue_id?: number) => {
+  const payload = { url, html, queue_id };
+  const { data } = await apiClient.post('/queue/manual', payload);
+  return data;
+};
+
 export const bulkEnqueueUrls = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
