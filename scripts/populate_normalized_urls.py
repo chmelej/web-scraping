@@ -7,13 +7,13 @@ import psycopg2.extras
 sys.path.append(os.getcwd())
 
 from src.utils.db import get_db_connection, get_cursor
-from src.utils.urls import normalize_url
+from src.utils.urls import normalize_url, unify_url
 from src.utils.logging_config import setup_logging
 from config.settings import LOG_DIR
 
-def populate_normalized_urls(batch_size=10000):
+def populate_normalized_urls(batch_size=10000, force_repopulate=True):
     logger = setup_logging('populate_normalized_urls', f"{LOG_DIR}/populate_normalized_urls.log")
-    logger.info("Starting population of normalized_url column in scr_scrape_queue...")
+    logger.info("Starting population/unification of normalized_url column in scr_scrape_queue...")
 
     conn = get_db_connection()
     total_updated = 0
@@ -21,19 +21,27 @@ def populate_normalized_urls(batch_size=10000):
     try:
         while True:
             with get_cursor(conn) as cur:
-                cur.execute("""
-                    SELECT queue_id, url
-                    FROM scr_scrape_queue
-                    WHERE normalized_url IS NULL
-                    LIMIT %s
-                """, (batch_size,))
+                if force_repopulate:
+                    cur.execute("""
+                        SELECT queue_id, url
+                        FROM scr_scrape_queue
+                        WHERE normalized_url IS NULL OR normalized_url LIKE 'http%%'
+                        LIMIT %s
+                    """, (batch_size,))
+                else:
+                    cur.execute("""
+                        SELECT queue_id, url
+                        FROM scr_scrape_queue
+                        WHERE normalized_url IS NULL
+                        LIMIT %s
+                    """, (batch_size,))
                 rows = cur.fetchall()
 
             if not rows:
-                logger.info("No more rows with NULL normalized_url found.")
+                logger.info("No more rows to update found.")
                 break
 
-            updates = [(row['queue_id'], normalize_url(row['url'])) for row in rows]
+            updates = [(row['queue_id'], unify_url(row['url'])) for row in rows]
 
             with get_cursor(conn, dict_cursor=False) as cur:
                 query = """
@@ -46,7 +54,7 @@ def populate_normalized_urls(batch_size=10000):
                 conn.commit()
 
             total_updated += len(updates)
-            logger.info(f"Populated {total_updated} normalized_url entries...")
+            logger.info(f"Populated/Unified {total_updated} normalized_url entries...")
 
     except Exception as e:
         logger.error(f"Error populating normalized_url: {e}", exc_info=True)

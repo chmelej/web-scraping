@@ -61,6 +61,10 @@
           <p class="font-medium break-all">{{ urlInfo.url }}</p>
         </div>
         <div>
+          <p class="text-sm text-gray-500">Normalized URL</p>
+          <p class="font-medium break-all">{{ urlInfo.normalized_url }}</p>
+        </div>
+        <div>
           <p class="text-sm text-gray-500">Site Type</p>
           <p class="font-medium">{{ urlInfo.site_type }}</p>
         </div>
@@ -91,9 +95,42 @@
         </ul>
       </div>
 
-      <div v-if="urlInfo.extracted_data" class="border-t border-gray-200 pt-4">
+      <div v-if="urlInfo.extracted_data" class="border-t border-gray-200 pt-4 mb-6">
         <h4 class="font-semibold mb-2">Extracted Data</h4>
         <pre class="bg-gray-50 p-4 rounded text-xs overflow-auto max-h-64">{{ JSON.stringify(urlInfo.extracted_data, null, 2) }}</pre>
+      </div>
+
+      <div class="border-t border-gray-200 pt-4 mb-6" v-if="urlInfo.history && urlInfo.history.length > 0">
+        <h4 class="font-semibold mb-4">Scraping History</h4>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200 border">
+            <thead class="bg-gray-50">
+              <tr>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Code</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Processing</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Error</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Raw HTML</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="historyRow in urlInfo.history" :key="historyRow.result_id">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatDate(historyRow.scraped_at) }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" :class="{'text-red-600': historyRow.status_code >= 400, 'text-green-600': historyRow.status_code == 200}">
+                  {{ historyRow.status_code || '-' }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ historyRow.processing_status }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-red-500 truncate max-w-[200px]" :title="historyRow.error_message">{{ historyRow.error_message || '-' }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <a :href="`/api/v1/queue/html/${historyRow.result_id}`" target="_blank" class="text-blue-600 hover:text-blue-900 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                    View HTML
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="mt-6 text-right">
