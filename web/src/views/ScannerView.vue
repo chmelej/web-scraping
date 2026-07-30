@@ -6,7 +6,7 @@
       <form @submit.prevent="searchUrl" class="flex gap-4">
         <input
           v-model="urlInput"
-          type="url"
+          type="text"
           required
           placeholder="https://www.example.com"
           class="flex-1 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -155,6 +155,12 @@ const enqueueSuccess = ref('');
 const urlInfo = ref<any>(null);
 
 const searchUrl = async () => {
+  let url = urlInput.value.trim();
+  if (url && !/^https?:\/\//i.test(url)) {
+    url = 'https://' + url;
+    urlInput.value = url;
+  }
+
   loading.value = true;
   error.value = '';
   isNotFound.value = false;
@@ -162,7 +168,7 @@ const searchUrl = async () => {
   urlInfo.value = null;
 
   try {
-    const data = await getUrlInfo(urlInput.value);
+    const data = await getUrlInfo(url);
     urlInfo.value = data;
   } catch (err: any) {
     if (err.response && err.response.status === 404) {
