@@ -237,6 +237,20 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
            if parsed_data:
              response_data["extracted_data"] = parsed_data['data']
 
+        # Add history list for the frontend table
+        if results:
+            response_data["history"] = []
+            for row in results:
+                response_data["history"].append({
+                    "result_id": row["result_id"],
+                    "scraped_at": row["scraped_at"].isoformat() if row.get("scraped_at") else None,
+                    "status_code": row["status_code"],
+                    "processing_status": row["processing_status"],
+                    "error_message": row["error_message"]
+                })
+        else:
+            response_data["history"] = []
+
         return response_data
 
 @router.get("/html/{result_id}")
