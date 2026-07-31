@@ -133,10 +133,47 @@
         </div>
       </div>
 
-      <div class="mt-6 text-right">
+      <div class="mt-6 flex justify-end gap-3">
+        <button @click="openManualUpdate" class="bg-gray-100 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-200 font-medium border border-gray-300">
+          Manual Update
+        </button>
         <button @click="enqueue" :disabled="enqueuing" class="bg-blue-100 text-blue-700 px-4 py-2 rounded text-sm hover:bg-blue-200 font-medium">
           {{ enqueuing ? 'Adding...' : 'Re-queue (Priority 10)' }}
         </button>
+      </div>
+    </div>
+
+    <!-- Manual Update Modal -->
+    <div v-if="showManualModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-4xl mx-4">
+        <h3 class="text-xl font-bold mb-4">Manual Update for {{ urlInfo?.url || urlInput }}</h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Paste the raw HTML source code of the page here. This will save the content as a successful scrape result and set the queue status to manual.
+        </p>
+
+        <div v-if="manualUpdateError" class="mb-4 bg-red-50 text-red-700 p-3 rounded text-sm border-l-4 border-red-500">
+          {{ manualUpdateError }}
+        </div>
+
+        <textarea
+          v-model="manualHtml"
+          rows="15"
+          placeholder="<html>...</html>"
+          class="w-full p-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm mb-4"
+        ></textarea>
+
+        <div class="flex justify-end gap-3">
+          <button @click="closeManualUpdate" class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 disabled:opacity-50" :disabled="submittingManual">
+            Cancel
+          </button>
+          <button @click="submitManualUpdate" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center" :disabled="submittingManual || !manualHtml.trim()">
+            <svg v-if="submittingManual" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {{ submittingManual ? 'Saving...' : 'Save Manual Update' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -144,7 +181,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
-import { getUrlInfo, enqueueUrl } from '../services/api';
+import { getUrlInfo, enqueueUrl, manualUpdateUrl } from '../services/api';
 
 const urlInput = ref('');
 const loading = ref(false);
@@ -153,6 +190,11 @@ const error = ref('');
 const isNotFound = ref(false);
 const enqueueSuccess = ref('');
 const urlInfo = ref<any>(null);
+
+const showManualModal = ref(false);
+const manualHtml = ref('');
+const submittingManual = ref(false);
+const manualUpdateError = ref('');
 
 const searchUrl = async () => {
   let url = urlInput.value.trim();
@@ -204,6 +246,44 @@ const enqueue = async () => {
     console.error(err);
   } finally {
     enqueuing.value = false;
+  }
+};
+
+const openManualUpdate = () => {
+  manualHtml.value = '';
+  manualUpdateError.value = '';
+  showManualModal.value = true;
+};
+
+const closeManualUpdate = () => {
+  showManualModal.value = false;
+};
+
+const submitManualUpdate = async () => {
+  if (!manualHtml.value.trim()) return;
+
+  submittingManual.value = true;
+  manualUpdateError.value = '';
+
+  try {
+    const targetUrl = urlInfo.value?.url || urlInput.value;
+    const queueId = urlInfo.value?.queue_id; // Will be undefined if it doesn't exist yet, which is fine
+
+    await manualUpdateUrl(targetUrl, manualHtml.value, queueId);
+
+    // Close modal and refresh data
+    showManualModal.value = false;
+    enqueueSuccess.value = 'Manual update successful!';
+
+    setTimeout(() => {
+      searchUrl();
+    }, 500);
+
+  } catch (err: any) {
+    manualUpdateError.value = err.response?.data?.detail || 'Failed to submit manual update.';
+    console.error(err);
+  } finally {
+    submittingManual.value = false;
   }
 };
 

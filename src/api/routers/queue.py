@@ -24,6 +24,11 @@ class QueueItemResponse(BaseModel):
     url: str
     status: str
 
+class ManualUpdateRequest(BaseModel):
+    url: HttpUrl
+    html: str
+    queue_id: Optional[int] = None
+
 @router.post("/", response_model=QueueItemResponse)
 def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = Depends(get_db_connection)):
     """Add a single URL to the scraping queue."""
@@ -86,6 +91,78 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
         except psycopg2.Error as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@router.post("/manual")
+def manual_update_url(item: ManualUpdateRequest, db: psycopg2.extensions.connection = Depends(get_db_connection)):
+    """Manually upload HTML for a URL, mimicking the scraper but bypassing fetching."""
+    from src.utils.storage import save_raw_html
+    raw_url = str(item.url)
+    cleaned_url = clean_url(raw_url)
+    norm_url = unify_url(raw_url)
+    html_content = item.html
+
+    with db.cursor(cursor_factory=DictCursor) as cursor:
+        try:
+            # 1. Ensure it's in the queue or update its status to 'manual'
+            queue_id = item.queue_id
+
+            if not queue_id:
+                # Try finding it
+                cursor.execute("""
+                    SELECT queue_id FROM scr_scrape_queue
+                    WHERE normalized_url = %s OR url = %s
+                """, (norm_url, cleaned_url))
+                row = cursor.fetchone()
+                if row:
+                    queue_id = row['queue_id']
+
+            if queue_id:
+                cursor.execute("""
+                    UPDATE scr_scrape_queue
+                    SET status = 'manual', retry_count = 0, next_scrape_at = NOW()
+                    WHERE queue_id = %s
+                """, (queue_id,))
+            else:
+                # Insert it manually if not found at all
+                cursor.execute("""
+                    INSERT INTO scr_scrape_queue (url, normalized_url, status)
+                    VALUES (%s, %s, 'manual')
+                    RETURNING queue_id
+                """, (cleaned_url, norm_url))
+                queue_id = cursor.fetchone()['queue_id']
+
+            # 2. Insert into scr_scrape_results (status_code 200, processing_status 'new')
+            cursor.execute("""
+                INSERT INTO scr_scrape_results
+                (queue_id, url, status_code, processing_status)
+                VALUES (%s, %s, %s, %s)
+                RETURNING result_id
+            """, (queue_id, cleaned_url, 200, 'new'))
+            result_id = cursor.fetchone()['result_id']
+
+            # 3. Save raw HTML to NFS
+            html_path, html_size = save_raw_html(cleaned_url, html_content, result_id=result_id)
+
+            # 4. Update the result with html path and size
+            if html_path:
+                cursor.execute("""
+                    UPDATE scr_scrape_results
+                    SET html_path = %s, html_size = %s
+                    WHERE result_id = %s
+                """, (html_path, html_size, result_id))
+
+            db.commit()
+
+            return {
+                "message": "Manual update successful",
+                "queue_id": queue_id,
+                "result_id": result_id
+            }
+
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Error processing manual update: {str(e)}")
+
 
 @router.post("/bulk")
 async def bulk_add_to_queue(file: UploadFile = File(...), db: psycopg2.extensions.connection = Depends(get_db_connection)):
@@ -201,6 +278,7 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
 
 
         response_data = {
+            "queue_id": queue_info['queue_id'] if queue_info else None,
             "url": queue_info['url'] if queue_info else search_url,
             "normalized_url": queue_info['normalized_url'] if queue_info and queue_info.get('normalized_url') else norm_url,
             "status": queue_info['status'] if queue_info else "unknown",
