@@ -86,15 +86,6 @@
         </div>
       </div>
 
-      <div class="border-t border-gray-200 pt-4 mb-6">
-        <h4 class="font-semibold mb-2">NFS Artifacts (Latest)</h4>
-        <ul class="space-y-2 text-sm">
-          <li><strong>HTML:</strong> <span class="text-gray-600 font-mono text-xs break-all">{{ urlInfo.latestHtmlLink || 'N/A' }}</span></li>
-          <li><strong>Markdown:</strong> <span class="text-gray-600 font-mono text-xs break-all">{{ urlInfo.latestMarkdownLink || 'N/A' }}</span></li>
-          <li><strong>Screenshot:</strong> <span class="text-gray-600 font-mono text-xs break-all">{{ urlInfo.latestScreenshotLink || 'N/A' }}</span></li>
-        </ul>
-      </div>
-
       <div v-if="urlInfo.extracted_data" class="border-t border-gray-200 pt-4 mb-6">
         <h4 class="font-semibold mb-2">Extracted Data</h4>
         <pre class="bg-gray-50 p-4 rounded text-xs overflow-auto max-h-64">{{ JSON.stringify(urlInfo.extracted_data, null, 2) }}</pre>
