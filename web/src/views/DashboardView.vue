@@ -23,27 +23,56 @@
         </div>
       </div>
 
-      <div class="bg-white p-6 rounded-lg shadow border border-gray-200">
-        <h3 class="text-lg font-bold mb-4">Recent Velocity (Last 7 Days)</h3>
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Scrapes</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Successful (200 OK)</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr v-for="day in stats.recent_velocity" :key="day.date">
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ day.date }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ day.total }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{{ day.success }}</td>
-            </tr>
-            <tr v-if="stats.recent_velocity.length === 0">
-              <td colspan="3" class="px-6 py-4 text-center text-gray-500">No scrape data available for the last 7 days.</td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200">
+          <h3 class="text-lg font-bold mb-4">Recent Velocity (Last 7 Days)</h3>
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Scrapes</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Successful (200 OK)</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="day in stats.recent_velocity" :key="day.date">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ day.date }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ day.total }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{{ day.success }}</td>
+              </tr>
+              <tr v-if="stats.recent_velocity.length === 0">
+                <td colspan="3" class="px-6 py-4 text-center text-gray-500">No scrape data available for the last 7 days.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200">
+          <h3 class="text-lg font-bold mb-4">Latest Scraped Domains</h3>
+          <table class="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scraped At</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domain</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr v-for="item in stats.recent_domains" :key="item.queue_id">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatDate(item.scraped_at) }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ item.domain || item.url }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <router-link :to="`/scanner?url=${encodeURIComponent(item.url)}`" class="text-blue-600 hover:text-blue-900">
+                    Scan URL
+                  </router-link>
+                </td>
+              </tr>
+              <tr v-if="!stats.recent_domains || stats.recent_domains.length === 0">
+                <td colspan="3" class="px-6 py-4 text-center text-gray-500">No recent domains available.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -52,6 +81,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { getDashboardInfo } from '../services/api';
+
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleString();
+};
 
 const loading = ref(true);
 const error = ref('');

@@ -180,8 +180,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { getUrlInfo, enqueueUrl, manualUpdateUrl } from '../services/api';
+
+const route = useRoute();
 
 const urlInput = ref('');
 const loading = ref(false);
@@ -291,4 +294,11 @@ const formatDate = (dateStr: string) => {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleString();
 };
+
+onMounted(() => {
+  if (route.query.url) {
+    urlInput.value = route.query.url as string;
+    searchUrl();
+  }
+});
 </script>
