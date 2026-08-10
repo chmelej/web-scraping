@@ -148,8 +148,9 @@
 
         <textarea
           v-model="manualHtml"
+          @paste="handlePaste"
           rows="15"
-          placeholder="<html>...</html>"
+          placeholder="Paste webpage content here (Ctrl+V) or raw HTML..."
           class="w-full p-3 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm mb-4"
         ></textarea>
 
@@ -186,6 +187,16 @@ const showManualModal = ref(false);
 const manualHtml = ref('');
 const submittingManual = ref(false);
 const manualUpdateError = ref('');
+
+const handlePaste = (e: ClipboardEvent) => {
+  if (e.clipboardData) {
+    const htmlData = e.clipboardData.getData('text/html');
+    if (htmlData) {
+      e.preventDefault();
+      manualHtml.value = htmlData;
+    }
+  }
+};
 
 const searchUrl = async () => {
   let url = urlInput.value.trim();

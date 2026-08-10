@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from ..deps import get_db_connection, get_cursor
 from ..utils.nfs import generate_nfs_path
 from src.utils.urls import clean_url, unify_url
-from src.utils.storage import read_raw_html, generate_html_file_path
+from src.utils.storage import read_raw_html, generate_html_file_path, save_raw_html
 
 
 router = APIRouter()
@@ -95,7 +95,6 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
 @router.post("/manual")
 def manual_update_url(item: ManualUpdateRequest, db: psycopg2.extensions.connection = Depends(get_db_connection)):
     """Manually upload HTML for a URL, mimicking the scraper but bypassing fetching."""
-    from src.utils.storage import save_raw_html
     raw_url = str(item.url)
     cleaned_url = clean_url(raw_url)
     norm_url = unify_url(raw_url)
