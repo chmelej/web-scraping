@@ -60,7 +60,7 @@
             <tbody class="bg-white divide-y divide-gray-200">
               <tr v-for="item in stats.recent_domains" :key="item.queue_id">
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatDate(item.scraped_at) }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ item.domain || item.url }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 truncate max-w-[200px] sm:max-w-[150px] md:max-w-[200px] xl:max-w-[300px]" :title="item.domain || item.url">{{ item.domain || item.url }}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                   <router-link :to="`/scanner?url=${encodeURIComponent(item.url)}`" class="text-blue-600 hover:text-blue-900">
                     Scan URL
