@@ -58,11 +58,11 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 mb-6">
         <div>
           <p class="text-sm text-gray-500">URL</p>
-          <p class="font-medium break-all">{{ urlInfo.url }}</p>
+          <a :href="urlInfo.url" target="_blank" class="font-medium break-all text-blue-600 hover:underline">{{ urlInfo.url }}</a>
         </div>
         <div>
           <p class="text-sm text-gray-500">Normalized URL</p>
-          <p class="font-medium break-all">{{ urlInfo.normalized_url }}</p>
+          <a :href="urlInfo.normalized_url" target="_blank" class="font-medium break-all text-blue-600 hover:underline">{{ urlInfo.normalized_url }}</a>
         </div>
         <div>
           <p class="text-sm text-gray-500">Site Type</p>
