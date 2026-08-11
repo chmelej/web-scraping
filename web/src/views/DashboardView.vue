@@ -24,7 +24,7 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="bg-white p-6 rounded-lg shadow border border-gray-200">
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200 min-w-0">
           <h3 class="text-lg font-bold mb-4">Recent Velocity (Last 7 Days)</h3>
           <table class="min-w-full divide-y divide-gray-200">
             <thead>
@@ -47,21 +47,21 @@
           </table>
         </div>
 
-        <div class="bg-white p-6 rounded-lg shadow border border-gray-200">
+        <div class="bg-white p-6 rounded-lg shadow border border-gray-200 min-w-0">
           <h3 class="text-lg font-bold mb-4">Latest Scraped Domains</h3>
-          <table class="min-w-full divide-y divide-gray-200">
+          <table class="w-full table-fixed divide-y divide-gray-200">
             <thead>
               <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scraped At</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domain</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                <th class="w-1/3 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scraped At</th>
+                <th class="w-1/3 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Domain</th>
+                <th class="w-1/3 px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
               <tr v-for="item in stats.recent_domains" :key="item.queue_id">
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatDate(item.scraped_at) }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ item.domain || item.url }}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 overflow-hidden">{{ formatDate(item.scraped_at) }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" :title="item.domain || item.url">{{ truncateText(item.domain || item.url, 20) }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium overflow-hidden">
                   <router-link :to="`/scanner?url=${encodeURIComponent(item.url)}`" class="text-blue-600 hover:text-blue-900">
                     Scan URL
                   </router-link>
@@ -85,6 +85,11 @@ import { getDashboardInfo } from '../services/api';
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-';
   return new Date(dateStr).toLocaleString();
+};
+
+const truncateText = (text: string, length: number) => {
+  if (!text) return '';
+  return text.length > length ? text.substring(0, length) + '...' : text;
 };
 
 const loading = ref(true);

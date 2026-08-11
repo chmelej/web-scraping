@@ -33,10 +33,14 @@ def get_dashboard(db: psycopg2.extensions.connection = Depends(get_db_connection
 
             # Daily scrapes from daily_scrapes view or direct table (last 7 days)
             cursor.execute("""
+                WITH max_date AS (
+                    SELECT COALESCE(MAX(scraped_at), NOW()) as max_scraped_at
+                    FROM scr_scrape_results
+                )
                 SELECT date_trunc('day', scraped_at) as day, count(*) as count,
                        sum(case when status_code = 200 then 1 else 0 end) as success_count
-                FROM scr_scrape_results
-                WHERE scraped_at >= NOW() - INTERVAL '7 days'
+                FROM scr_scrape_results, max_date
+                WHERE scraped_at >= max_date.max_scraped_at - INTERVAL '7 days'
                 GROUP BY 1
                 ORDER BY 1 DESC
             """)
