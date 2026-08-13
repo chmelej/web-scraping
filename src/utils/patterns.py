@@ -25,7 +25,7 @@ PATTERNS = {
         'twitter': r'(?:https?://)?(?:www\.)?(?:twitter\.com|x\.com)/[\w\-\.]+',
         'instagram': r'(?:https?://)?(?:www\.)?instagram\.com/[\w\-\.]+',
         'linkedin': r'(?:https?://)?(?:www\.)?linkedin\.com/(?:company|in|school)/[\w\-\.]+',
-        'youtube': r'(?:https?://)?(?:www\.)?youtube\.com/(?:channel|user|c|@)[\w\-\.]+',
+        'youtube': r'(?:https?://)?(?:www\.)?youtube\.com/(?:channel/|user/|c/|@)[\w\-\.]+',
         'google_business': r'(?:https?://)?(?:www\.)?(?:google\.com/maps.*cid=\d+|goo\.gl/maps/[\w\-\.]+|business\.google\.com/[\w\-\./]+|g\.page/[\w\-\./]+)',
     }
 }
