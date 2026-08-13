@@ -10,6 +10,10 @@ BLOOM_DIR = os.getenv('BLOOM_DIR', '.')
 
 def unaccent(text):
     """Odstraní diakritiku"""
+    if text is None:
+        return ""
+    if not isinstance(text, str):
+        text = str(text)
     nfkd_form = unicodedata.normalize('NFKD', text)
     ascii_text = ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
     return ascii_text.encode('ascii', 'ignore').decode('ascii')
