@@ -1,6 +1,6 @@
 import pytest
 from bs4 import BeautifulSoup
-from src.utils.patterns import extract_phones, extract_org_num, extract_social_media_from_soup, validate_be_org_num
+from src.utils.patterns import extract_phones, extract_org_num, extract_social_media_from_soup, validate_be_org_num, extract_social_media
 
 class TestPatterns:
     def test_validate_be_org_num_edge_cases(self):
@@ -79,7 +79,7 @@ class TestPatterns:
         assert extract_org_num(valid_2, 'cz') == "00006947"
         assert extract_org_num(invalid, 'cz') is None
 
-    def test_extract_social_media(self):
+    def test_extract_social_media_from_soup(self):
         html = """
         <html>
             <body>
@@ -101,3 +101,27 @@ class TestPatterns:
         assert socials['linkedin'] == "https://www.linkedin.com/company/example-co"
         assert socials['youtube'] == "https://youtube.com/channel/UC123456"
         assert socials['google_business'] == "https://goo.gl/maps/xyz"
+
+    def test_extract_social_media(self):
+        text = """
+        Visit us on Facebook: https://www.facebook.com/ExamplePage or FB: http://facebook.com/AnotherPage
+        Follow us on X (Twitter): https://twitter.com/ExampleUser
+        Check our pics on Instagram: www.instagram.com/example_pic
+        Our professional network: https://www.linkedin.com/company/example-co
+        Watch our videos on YouTube: https://youtube.com/channel/UC123456
+        Find us here: https://goo.gl/maps/xyz
+        """
+        socials = extract_social_media(text)
+
+        # Test happy path with various URL formats
+        assert socials['facebook'] == "https://www.facebook.com/ExamplePage"
+        assert socials['twitter'] == "https://twitter.com/ExampleUser"
+        assert socials['instagram'] == "www.instagram.com/example_pic"
+        assert socials['linkedin'] == "https://www.linkedin.com/company/example-co"
+        assert socials['youtube'] == "https://youtube.com/channel/UC123456"
+        assert socials['google_business'] == "https://goo.gl/maps/xyz"
+
+        # Test edge cases: negative case (no valid social media links)
+        empty_text = "There are no social media links here, just https://www.example.com and www.google.com."
+        empty_socials = extract_social_media(empty_text)
+        assert empty_socials == {}
