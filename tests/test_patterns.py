@@ -1,8 +1,32 @@
 import pytest
 from bs4 import BeautifulSoup
-from src.utils.patterns import extract_phones, extract_org_num, extract_social_media_from_soup
+from src.utils.patterns import extract_phones, extract_org_num, extract_social_media_from_soup, validate_be_org_num, extract_social_media
 
 class TestPatterns:
+    def test_validate_be_org_num_edge_cases(self):
+        # Happy paths
+        assert validate_be_org_num("0403.227.515") is True # 10 digits starting with 0
+        assert validate_be_org_num("403.227.515") is True # 9 digits padding to 0
+        assert validate_be_org_num("1000.000.021") is True # 10 digits starting with 1. 10000000 % 97 = 76, 97 - 76 = 21
+
+        # Length constraints
+        assert validate_be_org_num("403.227.51") is False # Too short (8 digits -> padded to 9)
+        assert validate_be_org_num("0403.227.5151") is False # Too long (11 digits)
+        assert validate_be_org_num("") is False # Empty
+
+        # Invalid characters (letters only, though it strips them out)
+        assert validate_be_org_num("BEABCDEFGH") is False
+
+        # Invalid starting digits
+        assert validate_be_org_num("2403.227.515") is False # Starts with 2
+
+        # Invalid range (starts with 0, second digit is 0 or 1)
+        assert validate_be_org_num("0100.000.029") is False
+        assert validate_be_org_num("0000.000.097") is False
+
+        # Invalid checksums
+        assert validate_be_org_num("0403.227.516") is False
+        assert validate_be_org_num("1000.000.022") is False
     def test_extract_phones_be(self):
         text = """
         Call us at +32 2 555 12 12 or 02/555.12.12.
@@ -55,7 +79,7 @@ class TestPatterns:
         assert extract_org_num(valid_2, 'cz') == "00006947"
         assert extract_org_num(invalid, 'cz') is None
 
-    def test_extract_social_media(self):
+    def test_extract_social_media_from_soup(self):
         html = """
         <html>
             <body>
@@ -77,3 +101,27 @@ class TestPatterns:
         assert socials['linkedin'] == "https://www.linkedin.com/company/example-co"
         assert socials['youtube'] == "https://youtube.com/channel/UC123456"
         assert socials['google_business'] == "https://goo.gl/maps/xyz"
+
+    def test_extract_social_media(self):
+        text = """
+        Visit us on Facebook: https://www.facebook.com/ExamplePage or FB: http://facebook.com/AnotherPage
+        Follow us on X (Twitter): https://twitter.com/ExampleUser
+        Check our pics on Instagram: www.instagram.com/example_pic
+        Our professional network: https://www.linkedin.com/company/example-co
+        Watch our videos on YouTube: https://youtube.com/channel/UC123456
+        Find us here: https://goo.gl/maps/xyz
+        """
+        socials = extract_social_media(text)
+
+        # Test happy path with various URL formats
+        assert socials['facebook'] == "https://www.facebook.com/ExamplePage"
+        assert socials['twitter'] == "https://twitter.com/ExampleUser"
+        assert socials['instagram'] == "www.instagram.com/example_pic"
+        assert socials['linkedin'] == "https://www.linkedin.com/company/example-co"
+        assert socials['youtube'] == "https://youtube.com/channel/UC123456"
+        assert socials['google_business'] == "https://goo.gl/maps/xyz"
+
+        # Test edge cases: negative case (no valid social media links)
+        empty_text = "There are no social media links here, just https://www.example.com and www.google.com."
+        empty_socials = extract_social_media(empty_text)
+        assert empty_socials == {}
