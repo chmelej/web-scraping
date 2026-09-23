@@ -231,41 +231,86 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
     parsed = urlparse(search_url)
 
     with db.cursor(cursor_factory=DictCursor) as cursor:
-        # Get queue info
+        # Get queue info - prefer exact URL match, then completed/pending status, then newest added
         cursor.execute("""
             SELECT * FROM scr_scrape_queue
             WHERE url_hash = %s OR url = %s
-            ORDER BY added_at DESC LIMIT 1
-        """, (norm_url, search_url))
+            ORDER BY 
+                CASE WHEN url = %s THEN 0 ELSE 1 END,
+                CASE WHEN status = 'completed' THEN 0 WHEN status = 'pending' THEN 1 ELSE 2 END,
+                added_at DESC 
+            LIMIT 1
+        """, (norm_url, search_url, search_url))
         queue_info = cursor.fetchone()
 
-        # Get results info
+        qid = queue_info['queue_id'] if queue_info else None
+
+        # Get results info for all queue items with matching url_hash / search_url or redirect chain
         cursor.execute("""
             SELECT * FROM scr_scrape_results
-            WHERE url = %s OR queue_id = %s
+            WHERE queue_id IN (
+                SELECT queue_id FROM scr_scrape_queue
+                WHERE url_hash = %s 
+                   OR url = %s
+                   OR (following_queue_id = %s AND %s IS NOT NULL)
+                   OR (queue_id = %s AND %s IS NOT NULL)
+            )
+            OR url = %s OR url = %s
             ORDER BY scraped_at DESC
-        """, (search_url, queue_info['queue_id'] if queue_info else None))
+        """, (
+            norm_url, search_url,
+            qid, qid,
+            qid, qid,
+            search_url, f"{search_url}/"
+        ))
         results = cursor.fetchall()
 
         if not queue_info and not results:
             # Basic fallback for small websites (ignore query string)
             if parsed.query:
                 base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-                cursor.execute("SELECT * FROM scr_scrape_queue WHERE url = %s ORDER BY added_at DESC LIMIT 1", (base_url,))
+                base_norm = unify_url(base_url)
+                cursor.execute("""
+                    SELECT * FROM scr_scrape_queue 
+                    WHERE url_hash = %s OR url = %s 
+                    ORDER BY 
+                        CASE WHEN url = %s THEN 0 ELSE 1 END,
+                        added_at DESC 
+                    LIMIT 1
+                """, (base_norm, base_url, base_url))
                 queue_info = cursor.fetchone()
-                cursor.execute("SELECT * FROM scr_scrape_results WHERE url = %s ORDER BY scraped_at DESC", (base_url,))
+                base_qid = queue_info['queue_id'] if queue_info else None
+                cursor.execute("""
+                    SELECT * FROM scr_scrape_results 
+                    WHERE queue_id IN (
+                        SELECT queue_id FROM scr_scrape_queue 
+                        WHERE url_hash = %s 
+                           OR url = %s
+                           OR (following_queue_id = %s AND %s IS NOT NULL)
+                           OR (queue_id = %s AND %s IS NOT NULL)
+                    )
+                    OR url = %s OR url = %s
+                    ORDER BY scraped_at DESC
+                """, (
+                    base_norm, base_url,
+                    base_qid, base_qid,
+                    base_qid, base_qid,
+                    base_url, f"{base_url}/"
+                ))
                 results = cursor.fetchall()
 
         if not queue_info and not results:
              raise HTTPException(status_code=404, detail="URL not found in queue or results")
 
-
         latest_result = results[0] if results else None
         first_result = results[-1] if results else None
 
-        # Determine website type based on depth/count (placeholder logic)
-        domain_pattern = f"%{parsed.netloc}%"
-        cursor.execute("SELECT COUNT(DISTINCT url) FROM scr_scrape_queue WHERE url LIKE %s", (domain_pattern,))
+        # Determine website type based on unique url_hash count for this domain
+        domain = norm_url.split('/')[0] if norm_url else (parsed.netloc or "")
+        cursor.execute("""
+            SELECT COUNT(DISTINCT url_hash) FROM scr_scrape_queue 
+            WHERE url_hash = %s OR url_hash LIKE %s
+        """, (domain, f"{domain}/%"))
         count_row = cursor.fetchone()
         domain_urls_count = count_row[0] if count_row else 0
 
@@ -282,6 +327,7 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
             "url_hash": queue_info['url_hash'] if queue_info and queue_info.get('url_hash') else norm_url,
             "normalized_url": queue_info['url_hash'] if queue_info and queue_info.get('url_hash') else norm_url,
             "status": queue_info['status'] if queue_info else "unknown",
+            "following_queue_id": queue_info['following_queue_id'] if queue_info and queue_info.get('following_queue_id') else None,
             "in_queue": bool(queue_info and queue_info['status'] == 'pending'),
             "added_at": queue_info['added_at'] if queue_info else None,
             "next_scrape_at": queue_info['next_scrape_at'] if queue_info else None,
@@ -321,6 +367,8 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
             for row in results:
                 response_data["history"].append({
                     "result_id": row["result_id"],
+                    "queue_id": row.get("queue_id"),
+                    "url": row.get("url"),
                     "scraped_at": row["scraped_at"].isoformat() if row.get("scraped_at") else None,
                     "status_code": row["status_code"],
                     "processing_status": row["processing_status"],

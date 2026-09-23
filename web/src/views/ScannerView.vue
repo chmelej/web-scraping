@@ -49,6 +49,7 @@
             'bg-yellow-100 text-yellow-800': urlInfo.status === 'pending',
             'bg-blue-100 text-blue-800': urlInfo.status === 'processing',
             'bg-red-100 text-red-800': urlInfo.status === 'failed',
+            'bg-purple-100 text-purple-800': urlInfo.status === 'redirected',
             'bg-gray-100 text-gray-800': !urlInfo.status
           }">
           {{ urlInfo.status || 'unknown' }}
@@ -61,16 +62,28 @@
           <a :href="urlInfo.url" target="_blank" class="font-medium break-all text-blue-600 hover:underline">{{ urlInfo.url }}</a>
         </div>
         <div>
-          <p class="text-sm text-gray-500">Normalized URL</p>
-          <a :href="urlInfo.normalized_url" target="_blank" class="font-medium break-all text-blue-600 hover:underline">{{ urlInfo.normalized_url }}</a>
+          <p class="text-sm text-gray-500">Normalized URL (Hash)</p>
+          <span class="font-medium break-all text-gray-800">{{ urlInfo.url_hash || urlInfo.normalized_url }}</span>
         </div>
         <div>
           <p class="text-sm text-gray-500">Site Type</p>
           <p class="font-medium">{{ urlInfo.site_type }}</p>
         </div>
         <div>
+          <p class="text-sm text-gray-500">Queue ID</p>
+          <p class="font-medium">#{{ urlInfo.queue_id || '-' }}</p>
+        </div>
+        <div>
           <p class="text-sm text-gray-500">Added to Queue</p>
           <p class="font-medium">{{ formatDate(urlInfo.added_at) }}</p>
+        </div>
+        <div v-if="urlInfo.following_queue_id">
+          <p class="text-sm text-gray-500">Redirected to (Following Queue ID)</p>
+          <p class="font-medium text-purple-700">#{{ urlInfo.following_queue_id }}</p>
+        </div>
+        <div>
+          <p class="text-sm text-gray-500">First Scraped</p>
+          <p class="font-medium">{{ formatDate(urlInfo.first_scraped_at) }}</p>
         </div>
         <div>
           <p class="text-sm text-gray-500">Latest Scrape</p>
@@ -92,12 +105,14 @@
       </div>
 
       <div class="border-t border-gray-200 pt-4 mb-6" v-if="urlInfo.history && urlInfo.history.length > 0">
-        <h4 class="font-semibold mb-4">Scraping History</h4>
+        <h4 class="font-semibold mb-4">Scraping History ({{ urlInfo.history.length }})</h4>
         <div class="overflow-x-auto">
           <table class="min-w-full divide-y divide-gray-200 border">
             <thead class="bg-gray-50">
               <tr>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scraped URL</th>
+                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Queue ID</th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Code</th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Processing</th>
                 <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Error</th>
@@ -107,6 +122,8 @@
             <tbody class="bg-white divide-y divide-gray-200">
               <tr v-for="historyRow in urlInfo.history" :key="historyRow.result_id">
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ formatDate(historyRow.scraped_at) }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-[200px] truncate" :title="historyRow.url">{{ historyRow.url }}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{{ historyRow.queue_id || '-' }}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium" :class="{'text-red-600': historyRow.status_code >= 400, 'text-green-600': historyRow.status_code == 200}">
                   {{ historyRow.status_code || '-' }}
                 </td>
