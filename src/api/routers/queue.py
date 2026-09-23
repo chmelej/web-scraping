@@ -34,15 +34,15 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
     """Add a single URL to the scraping queue."""
     raw_url = str(item.url)
     cleaned_url = clean_url(raw_url)
-    norm_url = unify_url(raw_url)
+    url_hash_str = unify_url(raw_url)
 
     with db.cursor(cursor_factory=DictCursor) as cursor:
         try:
-            # Check if URL exists by normalized_url or exact cleaned url
+            # Check if URL exists by url_hash or exact cleaned url
             cursor.execute("""
                 SELECT queue_id, status FROM scr_scrape_queue
-                WHERE (normalized_url = %s OR url = %s) AND (uni_listing_id = %s OR (uni_listing_id IS NULL AND %s IS NULL))
-            """, (norm_url, cleaned_url, item.uni_listing_id, item.uni_listing_id))
+                WHERE (url_hash = %s OR url = %s) AND (uni_listing_id = %s OR (uni_listing_id IS NULL AND %s IS NULL))
+            """, (url_hash_str, cleaned_url, item.uni_listing_id, item.uni_listing_id))
 
             existing = cursor.fetchone()
 
@@ -58,10 +58,10 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
                     # Update existing record
                     cursor.execute("""
                         UPDATE scr_scrape_queue
-                        SET status = 'pending', priority = %s, retry_count = 0, next_scrape_at = NOW(), normalized_url = %s
+                        SET status = 'pending', priority = %s, retry_count = 0, next_scrape_at = NOW(), url_hash = %s, url = %s
                         WHERE queue_id = %s
                         RETURNING queue_id, status
-                    """, (item.priority, norm_url, existing['queue_id']))
+                    """, (item.priority, url_hash_str, cleaned_url, existing['queue_id']))
                     updated = cursor.fetchone()
                     db.commit()
                     return QueueItemResponse(
@@ -73,10 +73,10 @@ def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = De
 
             # Insert new record
             cursor.execute("""
-                INSERT INTO scr_scrape_queue (url, normalized_url, uni_listing_id, priority, status)
+                INSERT INTO scr_scrape_queue (url, url_hash, uni_listing_id, priority, status)
                 VALUES (%s, %s, %s, %s, 'pending')
                 RETURNING queue_id, status
-            """, (cleaned_url, norm_url, item.uni_listing_id, item.priority))
+            """, (cleaned_url, url_hash_str, item.uni_listing_id, item.priority))
 
             new_item = cursor.fetchone()
             db.commit()
@@ -109,7 +109,7 @@ def manual_update_url(item: ManualUpdateRequest, db: psycopg2.extensions.connect
                 # Try finding it
                 cursor.execute("""
                     SELECT queue_id FROM scr_scrape_queue
-                    WHERE normalized_url = %s OR url = %s
+                    WHERE url_hash = %s OR url = %s
                 """, (norm_url, cleaned_url))
                 row = cursor.fetchone()
                 if row:
@@ -118,13 +118,13 @@ def manual_update_url(item: ManualUpdateRequest, db: psycopg2.extensions.connect
             if queue_id:
                 cursor.execute("""
                     UPDATE scr_scrape_queue
-                    SET status = 'manual', retry_count = 0, next_scrape_at = NOW()
+                    SET status = 'manual', retry_count = 0, next_scrape_at = NOW(), url_hash = %s, url = %s
                     WHERE queue_id = %s
-                """, (queue_id,))
+                """, (norm_url, cleaned_url, queue_id))
             else:
                 # Insert it manually if not found at all
                 cursor.execute("""
-                    INSERT INTO scr_scrape_queue (url, normalized_url, status)
+                    INSERT INTO scr_scrape_queue (url, url_hash, status)
                     VALUES (%s, %s, 'manual')
                     RETURNING queue_id
                 """, (cleaned_url, norm_url))
@@ -188,7 +188,7 @@ async def bulk_add_to_queue(file: UploadFile = File(...), db: psycopg2.extension
                 norm_url = unify_url(line_str)
 
                 # Check if exists
-                cursor.execute("SELECT queue_id, status FROM scr_scrape_queue WHERE normalized_url = %s OR url = %s", (norm_url, cleaned_url))
+                cursor.execute("SELECT queue_id, status FROM scr_scrape_queue WHERE url_hash = %s OR url = %s", (norm_url, cleaned_url))
                 existing = cursor.fetchone()
 
                 if existing:
@@ -196,16 +196,16 @@ async def bulk_add_to_queue(file: UploadFile = File(...), db: psycopg2.extension
                         # Requeue
                         cursor.execute("""
                             UPDATE scr_scrape_queue
-                            SET status = 'pending', priority = %s, retry_count = 0, next_scrape_at = NOW(), normalized_url = %s
+                            SET status = 'pending', priority = %s, retry_count = 0, next_scrape_at = NOW(), url_hash = %s, url = %s
                             WHERE queue_id = %s
-                        """, (priority, norm_url, existing['queue_id']))
+                        """, (priority, norm_url, cleaned_url, existing['queue_id']))
                         added_count += 1
                     else:
                         skipped_count += 1
                 else:
                     # Insert
                     cursor.execute("""
-                        INSERT INTO scr_scrape_queue (url, normalized_url, priority, status)
+                        INSERT INTO scr_scrape_queue (url, url_hash, priority, status)
                         VALUES (%s, %s, %s, 'pending')
                     """, (cleaned_url, norm_url, priority))
                     added_count += 1
@@ -234,7 +234,7 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
         # Get queue info
         cursor.execute("""
             SELECT * FROM scr_scrape_queue
-            WHERE normalized_url = %s OR url = %s
+            WHERE url_hash = %s OR url = %s
             ORDER BY added_at DESC LIMIT 1
         """, (norm_url, search_url))
         queue_info = cursor.fetchone()
@@ -279,7 +279,8 @@ def get_url_info(url: str, db: psycopg2.extensions.connection = Depends(get_db_c
         response_data = {
             "queue_id": queue_info['queue_id'] if queue_info else None,
             "url": queue_info['url'] if queue_info else search_url,
-            "normalized_url": queue_info['normalized_url'] if queue_info and queue_info.get('normalized_url') else norm_url,
+            "url_hash": queue_info['url_hash'] if queue_info and queue_info.get('url_hash') else norm_url,
+            "normalized_url": queue_info['url_hash'] if queue_info and queue_info.get('url_hash') else norm_url,
             "status": queue_info['status'] if queue_info else "unknown",
             "in_queue": bool(queue_info and queue_info['status'] == 'pending'),
             "added_at": queue_info['added_at'] if queue_info else None,

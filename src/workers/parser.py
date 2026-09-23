@@ -12,7 +12,7 @@ from src.utils.country import detect_country
 from src.utils.multipage import find_promising_links
 from src.utils.storage import read_raw_html
 from config.settings import LOG_DIR
-from src.utils.urls import normalize_url
+from src.utils.urls import clean_url, unify_url
 
 class Parser:
     def __init__(self):
@@ -177,14 +177,15 @@ class Parser:
 
         with get_cursor(self.conn, dict_cursor=False) as cur:
             for url, category in promising_links:
-                norm_url = normalize_url(url)
+                c_url = clean_url(url)
+                u_hash = unify_url(url)
                 cur.execute("""
                     INSERT INTO scr_scrape_queue
-                    (url, normalized_url, uni_listing_id, parent_scrape_id, depth, priority, opco)
+                    (url, url_hash, uni_listing_id, parent_scrape_id, depth, priority, opco)
                     VALUES (%s, %s, %s, %s, %s, 5, %s)
                     ON CONFLICT (url) DO UPDATE
-                    SET normalized_url = COALESCE(scr_scrape_queue.normalized_url, EXCLUDED.normalized_url)
-                """, (url, norm_url, uni_listing_id, parent_scrape_id, depth + 1, opco))
+                    SET url_hash = COALESCE(scr_scrape_queue.url_hash, EXCLUDED.url_hash)
+                """, (c_url, u_hash, uni_listing_id, parent_scrape_id, depth + 1, opco))
             self.conn.commit()
         
         self.logger.info(f"  -> Added {len(promising_links)} sub-pages to queue")

@@ -66,5 +66,36 @@ class TestScraperLogic(unittest.TestCase):
         update_call_sql = mock_cur.execute.call_args_list[0][0][0]
         self.assertIn("status = 'redirected'", update_call_sql)
 
+        # Verify insert into queue has url_hash
+        insert_call_sql = mock_cur.execute.call_args_list[1][0][0]
+        self.assertIn("url_hash", insert_call_sql)
+
+    @patch('workers.scraper.get_db_connection')
+    @patch('workers.scraper.setup_logging')
+    def test_verify_and_clean_item_url_sync(self, mock_log, mock_get_db):
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_cur.__enter__.return_value = mock_cur
+        mock_get_db.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cur
+
+        scraper = Scraper()
+
+        # Case 1: Already clean URL - should not query DB
+        clean_item = {'queue_id': 1, 'url': 'https://example.com'}
+        res = scraper.verify_and_clean_item_url_sync(clean_item)
+        self.assertEqual(res['url'], 'https://example.com')
+        self.assertFalse(mock_cur.execute.called)
+
+        # Case 2: Dirty URL with tracking params - updates DB with clean url and url_hash
+        mock_cur.fetchone.return_value = None # No existing duplicate
+        dirty_item = {'queue_id': 2, 'url': 'https://example.com/page/?utm_source=test'}
+        res = scraper.verify_and_clean_item_url_sync(dirty_item)
+        self.assertEqual(res['url'], 'https://example.com/page')
+        self.assertTrue(mock_cur.execute.called)
+        update_sql = mock_cur.execute.call_args_list[1][0][0]
+        self.assertIn("UPDATE scr_scrape_queue", update_sql)
+        self.assertIn("url_hash", update_sql)
+
 if __name__ == '__main__':
     unittest.main()

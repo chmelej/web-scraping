@@ -7,7 +7,8 @@ TRACKING_PARAMS = {
     'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
     'fbclid', 'gclid', 'gclsrc', 'dclid', 'msclkid', 'zanpid', 'igshid',
     'sessionid', 'phpsessid', 'sid', 'ncid', '_ga', '_gl', 'mc_eid', 'mc_cid',
-    'yclid', '_hsenc', '_hsmi'
+    'yclid', '_hsenc', '_hsmi', 'y_source', 'affiliate', 'clickid', 't_id',
+    'ref', 'referrer', 'subid'
 }
 
 def clean_url(url: str) -> str:

@@ -7,13 +7,13 @@ import psycopg2.extras
 sys.path.append(os.getcwd())
 
 from src.utils.db import get_db_connection, get_cursor
-from src.utils.urls import normalize_url, unify_url
+from src.utils.urls import unify_url
 from src.utils.logging_config import setup_logging
 from config.settings import LOG_DIR
 
-def populate_normalized_urls(batch_size=10000, force_repopulate=True):
-    logger = setup_logging('populate_normalized_urls', f"{LOG_DIR}/populate_normalized_urls.log")
-    logger.info("Starting population/unification of normalized_url column in scr_scrape_queue...")
+def populate_url_hash(batch_size=10000, force_repopulate=True):
+    logger = setup_logging('populate_url_hash', f"{LOG_DIR}/populate_url_hash.log")
+    logger.info("Starting population/unification of url_hash column in scr_scrape_queue...")
 
     conn = get_db_connection()
     total_updated = 0
@@ -25,14 +25,14 @@ def populate_normalized_urls(batch_size=10000, force_repopulate=True):
                     cur.execute("""
                         SELECT queue_id, url
                         FROM scr_scrape_queue
-                        WHERE normalized_url IS NULL OR normalized_url LIKE 'http%%'
+                        WHERE url_hash IS NULL OR url_hash LIKE 'http%%' OR url_hash LIKE 'www.%%'
                         LIMIT %s
                     """, (batch_size,))
                 else:
                     cur.execute("""
                         SELECT queue_id, url
                         FROM scr_scrape_queue
-                        WHERE normalized_url IS NULL
+                        WHERE url_hash IS NULL
                         LIMIT %s
                     """, (batch_size,))
                 rows = cur.fetchall()
@@ -46,7 +46,7 @@ def populate_normalized_urls(batch_size=10000, force_repopulate=True):
             with get_cursor(conn, dict_cursor=False) as cur:
                 query = """
                     UPDATE scr_scrape_queue AS q
-                    SET normalized_url = v.norm_url
+                    SET url_hash = v.norm_url
                     FROM (VALUES %s) AS v(queue_id, norm_url)
                     WHERE q.queue_id = v.queue_id
                 """
@@ -54,14 +54,14 @@ def populate_normalized_urls(batch_size=10000, force_repopulate=True):
                 conn.commit()
 
             total_updated += len(updates)
-            logger.info(f"Populated/Unified {total_updated} normalized_url entries...")
+            logger.info(f"Populated/Unified {total_updated} url_hash entries...")
 
     except Exception as e:
-        logger.error(f"Error populating normalized_url: {e}", exc_info=True)
+        logger.error(f"Error populating url_hash: {e}", exc_info=True)
     finally:
         conn.close()
 
-    logger.info(f"Finished populating normalized_url! Total rows updated: {total_updated}.")
+    logger.info(f"Finished populating url_hash! Total rows updated: {total_updated}.")
 
 if __name__ == '__main__':
-    populate_normalized_urls()
+    populate_url_hash()

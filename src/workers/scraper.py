@@ -18,7 +18,7 @@ from crawlee.storage_clients import MemoryStorageClient
 from crawlee.configuration import Configuration
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.language import detect_language
-from src.utils.urls import extract_domain, normalize_url
+from src.utils.urls import extract_domain, clean_url, unify_url
 from src.utils.logging_config import setup_logging
 from src.utils.multipage import find_promising_links
 from src.utils.storage import save_raw_html
@@ -145,6 +145,66 @@ class Scraper:
         finally:
             conn.close()
 
+    def verify_and_clean_item_url_sync(self, item):
+        """
+        Ensures scr_scrape_queue.url is clean_url(url) and url_hash is unify_url(url) before scraping.
+        If url was uncleaned, updates it in DB (or marks as redirected if cleaned url already exists).
+        """
+        raw_url = item['url']
+        c_url = clean_url(raw_url)
+        if c_url == raw_url:
+            return item
+
+        queue_id = item['queue_id']
+        u_hash = unify_url(raw_url)
+        self.logger.info(f"Pre-scrape URL repair for queue_id {queue_id}: {raw_url} -> {c_url}")
+
+        conn = get_db_connection()
+        try:
+            with get_cursor(conn, dict_cursor=False) as cur:
+                # Check if c_url already exists under another queue_id
+                cur.execute("SELECT queue_id FROM scr_scrape_queue WHERE url = %s AND queue_id != %s", (c_url, queue_id))
+                existing = cur.fetchone()
+                if existing:
+                    target_id = existing[0]
+                    # Mark current as redirected to existing
+                    cur.execute("""
+                        UPDATE scr_scrape_queue
+                        SET status = 'redirected', following_queue_id = %s
+                        WHERE queue_id = %s
+                    """, (target_id, queue_id))
+                    # Relink results if any
+                    cur.execute("""
+                        UPDATE scr_scrape_results
+                        SET queue_id = %s, url = %s
+                        WHERE queue_id = %s
+                    """, (target_id, c_url, queue_id))
+                    conn.commit()
+                    item['status'] = 'redirected'
+                    item['following_queue_id'] = target_id
+                    item['url'] = c_url
+                    return item
+                else:
+                    cur.execute("""
+                        UPDATE scr_scrape_queue
+                        SET url = %s, url_hash = %s
+                        WHERE queue_id = %s
+                    """, (c_url, u_hash, queue_id))
+                    cur.execute("""
+                        UPDATE scr_scrape_results
+                        SET url = %s
+                        WHERE queue_id = %s
+                    """, (c_url, queue_id))
+                    conn.commit()
+                    item['url'] = c_url
+                    return item
+        except Exception as e:
+            self.logger.error(f"Error in verify_and_clean_item_url_sync for {queue_id}: {e}")
+            conn.rollback()
+            return item
+        finally:
+            conn.close()
+
     def handle_redirect_sync(self, queue_id, original_url, final_url, uni_listing_id, opco, depth, priority=0):
         """Mark original URL as 'redirected' and insert final_url as a new queue item"""
         conn = get_db_connection()
@@ -158,20 +218,29 @@ class Scraper:
                 """, (queue_id,))
 
                 # 2. Insert final_url into queue as new item (or return existing if present)
-                norm_final_url = normalize_url(final_url)
+                c_final_url = clean_url(final_url)
+                u_hash = unify_url(final_url)
                 cur.execute("""
                     INSERT INTO scr_scrape_queue
-                    (url, normalized_url, uni_listing_id, opco, depth, priority, status)
+                    (url, url_hash, uni_listing_id, opco, depth, priority, status)
                     VALUES (%s, %s, %s, %s, %s, %s, 'pending')
                     ON CONFLICT (url) DO UPDATE
                     SET uni_listing_id = COALESCE(scr_scrape_queue.uni_listing_id, EXCLUDED.uni_listing_id),
                         opco = COALESCE(scr_scrape_queue.opco, EXCLUDED.opco),
-                        normalized_url = COALESCE(scr_scrape_queue.normalized_url, EXCLUDED.normalized_url)
+                        url_hash = EXCLUDED.url_hash
                     RETURNING queue_id
-                """, (final_url, norm_final_url, uni_listing_id, opco, depth, priority))
+                """, (c_final_url, u_hash, uni_listing_id, opco, depth, priority))
                 new_queue_id = cur.fetchone()[0]
+
+                # 3. Update following_queue_id on original queue item
+                cur.execute("""
+                    UPDATE scr_scrape_queue
+                    SET following_queue_id = %s
+                    WHERE queue_id = %s
+                """, (new_queue_id, queue_id))
+
                 conn.commit()
-                self.logger.info(f"Redirect handled: {original_url} (queue_id {queue_id} -> redirected) -> {final_url} (queue_id {new_queue_id})")
+                self.logger.info(f"Redirect handled: {original_url} (queue_id {queue_id} -> redirected) -> {c_final_url} (queue_id {new_queue_id})")
                 return new_queue_id
         except Exception as e:
             self.logger.error(f"Error handling redirect {original_url} -> {final_url}: {e}")
@@ -253,14 +322,15 @@ class Scraper:
              promising = find_promising_links(html, parent_url, language)
              with get_cursor(conn, dict_cursor=False) as cur:
                  for url, category in promising:
-                     norm_url = normalize_url(url)
+                     c_url = clean_url(url)
+                     u_hash = unify_url(url)
                      cur.execute("""
                         INSERT INTO scr_scrape_queue
-                        (url, normalized_url, uni_listing_id, parent_scrape_id, depth, priority)
+                        (url, url_hash, uni_listing_id, parent_scrape_id, depth, priority)
                         VALUES (%s, %s, %s, %s, %s, 5)
                         ON CONFLICT (url) DO UPDATE
-                        SET normalized_url = COALESCE(scr_scrape_queue.normalized_url, EXCLUDED.normalized_url)
-                     """, (url, norm_url, uni_listing_id, parent_id, depth + 1))
+                        SET url_hash = COALESCE(scr_scrape_queue.url_hash, EXCLUDED.url_hash)
+                     """, (c_url, u_hash, uni_listing_id, parent_id, depth + 1))
                  conn.commit()
 
              if promising:
@@ -465,6 +535,12 @@ class Scraper:
             return False
 
         item = batch[0]
+        # Pre-scrape check: ensure clean_url(url) == url
+        item = self.verify_and_clean_item_url_sync(item)
+        if item.get('status') == 'redirected':
+            self.logger.info(f"Item {item['queue_id']} was redirected/merged during pre-scrape check.")
+            return True
+
         self.logger.info(f"Processing one: {item['url']}")
 
         # Mark as processing
@@ -536,9 +612,17 @@ class Scraper:
 
             request_list = []
             for item in batch:
+                # Pre-scrape check: ensure clean_url(url) == url
+                item = self.verify_and_clean_item_url_sync(item)
+                if item.get('status') == 'redirected':
+                    continue
+
                 # Mark as processing immediately
                 self.update_queue_status_sync(item['queue_id'], 'processing')
                 request_list.append(self.create_request_for_item(item))
+
+            if not request_list:
+                continue
 
             # Configure Crawler with isolation
             crawler = PlaywrightCrawler(
