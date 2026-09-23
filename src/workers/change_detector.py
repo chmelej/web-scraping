@@ -21,7 +21,7 @@ class ChangeDetector:
                 WHERE uni_listing_id = %s
                 ORDER BY extracted_at DESC
                 LIMIT 2
-            """)
+            """,(uni_listing_id))
             return cur.fetchall()
 
     def detect_changes(self, old_data, new_data):

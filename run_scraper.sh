@@ -25,5 +25,6 @@ while true; do
         # Optional small sleep to let system breathe
         sleep 1
     fi
+    rm logs/scraper.log
 done
 

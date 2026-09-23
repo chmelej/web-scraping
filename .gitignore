@@ -8,7 +8,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
-/web-scraper/storage/
+/web-scraper/storage
 *$py.class
 .coverage
 .DS_Store
@@ -18,5 +18,5 @@ venv/
 *.py[cod]
 /uv.lock
 /docs/crawlee-python.repomix.xml
-/storage/
-/data/
+/storage
+/data

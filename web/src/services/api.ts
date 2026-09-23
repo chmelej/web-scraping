@@ -18,7 +18,7 @@ export const getUrlInfo = async (url: string) => {
 };
 
 export const enqueueUrl = async (url: string, priority: number = 10) => {
-  const { data } = await apiClient.post('/queue', { url, priority });
+  const { data } = await apiClient.post('/queue/', { url, priority });
   return data;
 };
 
