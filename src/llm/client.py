@@ -1,5 +1,3 @@
-import os
-import json
 from config.settings import ANTHROPIC_API_KEY, OPENAI_API_KEY
 
 # Minimal mock client logic if keys are missing,
