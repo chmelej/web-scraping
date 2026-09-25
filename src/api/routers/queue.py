@@ -3,7 +3,6 @@ from fastapi.responses import HTMLResponse
 import psycopg2
 from psycopg2.extras import DictCursor
 from pydantic import BaseModel, HttpUrl
-from typing import List, Optional, Any
 from urllib.parse import urlparse
 from ..deps import get_db_connection, get_cursor
 from ..utils.nfs import generate_nfs_path
@@ -16,18 +15,18 @@ router = APIRouter()
 class QueueItemRequest(BaseModel):
     url: HttpUrl
     priority: int = 10
-    uni_listing_id: Optional[int] = None
+    uni_listing_id: int | None = None
 
 class QueueItemResponse(BaseModel):
     message: str
-    id: Optional[int] = None
+    id: int | None = None
     url: str
     status: str
 
 class ManualUpdateRequest(BaseModel):
     url: HttpUrl
     html: str
-    queue_id: Optional[int] = None
+    queue_id: int | None = None
 
 @router.post("/", response_model=QueueItemResponse)
 def add_to_queue(item: QueueItemRequest, db: psycopg2.extensions.connection = Depends(get_db_connection)):
