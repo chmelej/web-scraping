@@ -1,6 +1,5 @@
 from bs4 import BeautifulSoup
 import json
-import time
 import re
 from src.utils.db import get_db_connection, get_cursor
 from src.utils.patterns import (
